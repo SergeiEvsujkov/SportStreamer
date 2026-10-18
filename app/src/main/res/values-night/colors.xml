@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Тёмная тема: панель управления темнее, чтобы текст читался. -->
+    <color name="primary">#BB86FC</color>
+    <color name="control_bar">#263238</color>
+    <color name="record_button">#B3261E</color>
+</resources>

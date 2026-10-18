@@ -3,6 +3,10 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
 android {
     namespace = "com.example.sportstreamer"
     compileSdk {
@@ -11,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.sportstreamer"
-        minSdk = 24
+        minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -28,13 +32,18 @@ android {
             )
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "11"
+
+    // Настройка viewBinding ровно одна: раньше был ещё дублирующий блок viewBinding { enable = true }.
+    buildFeatures {
+        viewBinding = true
     }
+
+    // buildToolsVersion не задаём: версию выбирает AGP, лишняя привязка к 36.1.0 не нужна.
 }
 
 dependencies {
@@ -43,7 +52,14 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
+
+    implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
+    // extra-sources добавляет CameraX/UVC-источники.
+    implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
+    // Палитра выбора цвета собирается из MaterialCardView, отдельная библиотека не нужна.
 }

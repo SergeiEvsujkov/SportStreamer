@@ -1,20 +1,1533 @@
 package com.example.sportstreamer
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
+import android.util.Range
+import android.view.MotionEvent
+import android.view.SurfaceHolder
+import android.view.View
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updatePadding
+import com.example.sportstreamer.databinding.ActivityMainBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.library.rtmp.RtmpCamera2
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
+/**
+ * Пульт трансляции: счёт, оверлеи, RTMP и локальная запись.
+ *
+ * Логика матча вынесена в [ScoreEngine], адаптация битрейта — в [BitrateAdapter],
+ * запись — в [VideoRecorder], оверлеи — в [ScoreOverlay], доступ к настройкам — в [SettingsRepository].
+ */
+class MainActivity : AppCompatActivity(), ConnectChecker {
+
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var settings: SettingsLoc
+    private lateinit var engine: ScoreEngine
+    private lateinit var bitrateAdapter: BitrateAdapter
+
+    private var rtmpCamera2: RtmpCamera2? = null
+    private var overlay: ScoreOverlay? = null
+    private var recorder: VideoRecorder? = null
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Единственный цикл адаптации битрейта: сам себя останавливает, когда трансляция кончилась. */
+    private val bitrateTicker = object : Runnable {
+        override fun run() {
+            val camera = rtmpCamera2 ?: return
+            if (!camera.isStreaming) return
+            updateBitrateStats(camera)
+            // Держим плашки в актуальном состоянии: соединение может пропасть между кликами.
+            updateUi()
+            handler.postDelayed(this, BitrateAdapter.UPDATE_INTERVAL_MS)
+        }
+    }
+
+    private var surfaceHolderCallback: SurfaceHolder.Callback? = null
+    private var streamPrepared = false
+
+    /** Работает ли превью: `stopStream()` закрывает камеру, и её нужно открыть заново. */
+    private var previewRunning = false
+
+    /** Экран настроек уже показан при первом запуске — второй раз не открываем. */
+    private var awaitingSettings = false
+
+    /** Превью развёрнуто на весь экран. */
+    private var previewFullscreen = false
+
+    /** Параметры превью до разворота — чтобы вернуть их обратно. */
+    private var collapsedPreviewParams: ConstraintLayout.LayoutParams? = null
+
+    /** Текущий зум камеры (значение из диапазона getZoomRange()). */
+    private var currentZoom = 1f
+
+    /** Удержание кнопок зума: пока палец на кнопке, значение меняется маленькими шагами. */
+    private var zoomHoldRunnable: Runnable? = null
+    private var zoomHoldDirection = 0
+    private var zoomHoldStartedAt = 0L
+    private var zoomHoldTicks = 0
+
+    /** Предупреждение о неподдерживаемой стабилизации показываем один раз за запуск. */
+    private var stabilizationWarningShown = false
+
+    /** Номер текущей части записи и задача на её закрытие (деление записи по минутам). */
+    private var recordingPart = 0
+    private var splitRunnable: Runnable? = null
+
+    /** Время начала текущего файла: из него считается «00:42» в нижней строке пульта. */
+    private var recordingStartedAtMs = 0L
+
+    /**
+     * Идёт ли запись в память прямо сейчас.
+     *
+     * Единственный источник правды — наш дескриптор файла. `camera.isRecording` для этого
+     * не годится: библиотека отдаёт `false` сразу после `startRecord()` и на время смены части,
+     * из-за чего плашка «Запись» пропадала, тикер таймера останавливался, а повторное нажатие
+     * кнопки запускало вторую запись вместо остановки.
+     */
+    private val isRecordingNow: Boolean
+        get() = recorder?.isActive == true
+
+    /** Секундный тикер времени записи; сам останавливается, когда запись кончилась. */
+    private val recordTicker = object : Runnable {
+        override fun run() {
+            // Ориентируемся на наш собственный дескриптор, а не на camera.isRecording:
+            // библиотека отдаёт false сразу после startRecord и на время смены части записи,
+            // из-за чего таймер и плашка «Запись» пропадали.
+            if (recorder?.isActive != true) return
+            // Таймер и плашка записи обновляются раз в секунду — состояние не «залипает».
+            updateUi()
+            handler.postDelayed(this, RECORD_TICK_MS)
+        }
+    }
+
+    /**
+     * Поток остановлен самим пользователем — тогда обрыв не перезапускаем.
+     *
+     * Снимается только при следующем явном запуске. Сбрасывать флаг сразу после `stopStream()`
+     * нельзя: библиотека гасит соединение в корутине на Dispatchers.IO и вызывает
+     * `ConnectChecker.onDisconnect()` уже постом в главный поток, то есть после возврата из
+     * остановки. Со сброшенным флагом `onDisconnect()` принимал нашу же остановку за обрыв
+     * связи и через `scheduleHardStreamRestart()` поднимал трансляцию обратно.
+     */
+    private var userStoppedStream = false
+
+    /**
+     * Реально ли установлено соединение с сервером.
+     *
+     * `camera.isStreaming` для этого не годится: библиотека выставляет его ещё до подключения
+     * и не сбрасывает после неудачи, поэтому после «Connection refused» пульт показывал «В эфире»,
+     * а проверки по `isStreaming` блокировали переподключение.
+     */
+    @Volatile
+    private var streamConnected = false
+
+    /** Сколько раз поднимали поток «с нуля» после исчерпания автопереподключений библиотеки. */
+    private var streamHardRestartCount = 0
+
+    /** Отложенный перезапуск потока: библиотека исчерпала свои попытки переподключения. */
+    private val hardRestartRunnable = Runnable { restartStreamFromScratch() }
+
+    private var retryCount = 0
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.CAMERA] == true &&
+            result[Manifest.permission.RECORD_AUDIO] == true
+        if (granted) {
+            toast(getString(R.string.main_permissions_granted))
+            prepareStream()
+        } else {
+            toast(getString(R.string.permissions_camera_audio_required))
+            binding.bitrate.text = getString(R.string.main_bitrate_disabled)
+            updateUi()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            // В светлой теме системные значки должны быть тёмными — иначе они белые на белом.
+            val darkTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+        }
+
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        settings = SettingsRepository.load(this)
+        engine = ScoreEngine(settings.setsToWin)
+        savedInstanceState?.let(::restoreMatchState)
+        // Экран настроек мог быть уже открыт до пересоздания (например, при смене темы).
+        // Без восстановления флага пульт открывал бы второй экран настроек поверх первого.
+        awaitingSettings = savedInstanceState?.getBoolean(STATE_AWAITING_SETTINGS) ?: false
+        bitrateAdapter = BitrateAdapter()
+
+        val camera = RtmpCamera2(binding.openGlView, this)
+        rtmpCamera2 = camera
+        overlay = ScoreOverlay(camera, resources)
+        recorder = VideoRecorder(this)
+
+        // Запоминаем исходные параметры превью до любых изменений — они нужны для возврата
+        // из полноэкранного режима.
+        collapsedPreviewParams = ConstraintLayout.LayoutParams(
+            binding.openGlView.layoutParams as ConstraintLayout.LayoutParams
+        )
+
+        applyWindowInsets()
+        setupClickListeners()
+        updateUi()
+
+        if (!settings.isConfigured) {
+            // Настройки откроет onResume — только когда пульт действительно на экране.
+            // Из onCreate открывать нельзя: при смене темы активити пересоздаётся в фоне,
+            // и onCreate ставил второй экран настроек поверх уже открытого.
+            return
+        }
+
+        ensurePermissions()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!::binding.isInitialized) return
+
+        settings = SettingsRepository.load(this)
+        if (!settings.isConfigured) {
+            if (!awaitingSettings) {
+                awaitingSettings = true
+                startActivity(Intent(this, SettingsActivity::class.java))
+            }
+            return
+        }
+        if (awaitingSettings) {
+            // Настройки заполнили — досоздаём пульт. recreate() здесь использовать нельзя:
+            // активити перезапускается со старым savedInstanceState, где awaitingSettings = true,
+            // флаг восстанавливается снова, и экран пересоздаётся бесконечно (проверено на
+            // устройстве: чёрный экран и relaunch каждые ~300 мс). В onCreate до этого места
+            // камера, оверлей и рекордер уже созданы — не хватало только разрешений и превью.
+            awaitingSettings = false
+            updateUi()
+            ensurePermissions()
+            return
+        }
+
+        if (settings.setsToWin != engine.setsToWin) {
+            // Формат матча изменили в настройках — начинаем матч заново.
+            engine = ScoreEngine(settings.setsToWin)
+        }
+
+        // Свёртывание и остановка потока гасят GL-интерфейс: сначала возвращаем превью,
+        // затем графику счёта.
+        rtmpCamera2?.let { ensurePreview(it) }
+        if (previewRunning) {
+            attachOverlay()
+            // Настройку могли изменить на экране настроек — применяем заново.
+            applyVideoStabilization()
+            applyExposure()
+        }
+        updateUi()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopEverything(showToasts = true)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val snapshot = engine.snapshot()
+        outState.putInt(STATE_TEAM1_SCORE, snapshot.team1Score)
+        outState.putInt(STATE_TEAM2_SCORE, snapshot.team2Score)
+        outState.putInt(STATE_TEAM1_SETS, snapshot.team1Sets)
+        outState.putInt(STATE_TEAM2_SETS, snapshot.team2Sets)
+        outState.putBoolean(STATE_DECLINED, snapshot.setCompletionDeclined)
+        outState.putBoolean(STATE_AWAITING_SETTINGS, awaitingSettings)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopZoomHold()
+        handler.removeCallbacksAndMessages(null)
+
+        val camera = rtmpCamera2
+        try {
+            if (camera != null) {
+                if (isRecordingNow) camera.stopRecord()
+                if (camera.isStreaming) camera.stopStream()
+                camera.stopPreview()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка остановки RTMP", e)
+        }
+
+        // Если запись почему-то ещё активна, файл недописан — удаляем, чтобы в галерее не было мусора.
+        recorder?.let { if (it.isActive) it.discard() }
+
+        surfaceHolderCallback?.let { binding.openGlView.holder.removeCallback(it) }
+        surfaceHolderCallback = null
+
+        binding.streamBtn.setOnClickListener(null)
+        binding.recordBtn.setOnClickListener(null)
+        binding.settingsBtn.setOnClickListener(null)
+        binding.fullscreenBtn.setOnClickListener(null)
+        binding.collapseBtn.setOnClickListener(null)
+        binding.zoomInBtn.setOnClickListener(null)
+        binding.zoomOutBtn.setOnClickListener(null)
+        binding.firstPlusButton.setOnClickListener(null)
+        binding.firstMinusButton.setOnClickListener(null)
+        binding.secondPlusButton.setOnClickListener(null)
+        binding.secondMinusButton.setOnClickListener(null)
+
+        overlay?.detach()
+        rtmpCamera2 = null
+        // Повторная очистка: stopStream() запускает disconnect() в корутине, и колбэки могли
+        // успеть поставить задачи в handler уже после первой очистки.
+        handler.removeCallbacksAndMessages(null)
+    }
+
+    // ---------------------------------------------------------------- счёт
+
+    private fun setupClickListeners() {
+        binding.firstPlusButton.setOnClickListener { onPoint(ScoreEngine.Team.FIRST, add = true) }
+        binding.firstMinusButton.setOnClickListener { onPoint(ScoreEngine.Team.FIRST, add = false) }
+        binding.secondPlusButton.setOnClickListener { onPoint(ScoreEngine.Team.SECOND, add = true) }
+        binding.secondMinusButton.setOnClickListener { onPoint(ScoreEngine.Team.SECOND, add = false) }
+
+        binding.streamBtn.setOnClickListener { toggleBroadcast() }
+        binding.recordBtn.setOnClickListener { toggleRecording() }
+        binding.fullscreenBtn.setOnClickListener { setPreviewFullscreen(true) }
+        binding.collapseBtn.setOnClickListener { setPreviewFullscreen(false) }
+        // Короткое нажатие — один шаг, удержание — плавное изменение (startZoomHold).
+        // Счётчик тиков обнуляем, чтобы следующее нажатие снова сработало (в том числе через TalkBack).
+        binding.zoomInBtn.setOnClickListener {
+            if (zoomHoldTicks == 0) zoomStep(1)
+            zoomHoldTicks = 0
+        }
+        binding.zoomOutBtn.setOnClickListener {
+            if (zoomHoldTicks == 0) zoomStep(-1)
+            zoomHoldTicks = 0
+        }
+        binding.zoomInBtn.setOnTouchListener { _, event -> handleZoomTouch(event, 1) }
+        binding.zoomOutBtn.setOnTouchListener { _, event -> handleZoomTouch(event, -1) }
+        binding.settingsBtn.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+    }
+
+    private fun onPoint(team: ScoreEngine.Team, add: Boolean) {
+        if (add && engine.isMatchOver) {
+            toast(getString(R.string.main_match_over_toast))
+            return
+        }
+
+        val result = if (add) {
+            engine.addPoint(team)
+        } else {
+            engine.removePoint(team)
+            ScoreEngine.PointResult.ScoreChanged
+        }
+
+        when (result) {
+            is ScoreEngine.PointResult.SetFinished -> showSetFinishedDialog(result.team)
+            is ScoreEngine.PointResult.MatchFinished -> showMatchFinishedDialog(result.team)
+            ScoreEngine.PointResult.Ignored, ScoreEngine.PointResult.ScoreChanged -> Unit
+        }
+
+        onMatchChanged()
+    }
+
+    private fun showSetFinishedDialog(winner: ScoreEngine.Team) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.main_set_finished_title)
+            .setMessage(
+                getString(
+                    R.string.main_set_finished_message,
+                    engine.team1Score,
+                    engine.team2Score
+                )
+            )
+            .setCancelable(false)
+            .setPositiveButton(R.string.main_set_finished_positive) { _, _ ->
+                engine.startNewSet(winner)
+                onMatchChanged()
+            }
+            .setNegativeButton(R.string.main_set_finished_negative) { dialog, _ ->
+                engine.declineSetCompletion()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun showMatchFinishedDialog(winner: ScoreEngine.Team) {
+        val winnerName = if (winner == ScoreEngine.Team.FIRST) settings.team1Name else settings.team2Name
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.main_match_finished_title)
+            .setMessage(
+                getString(
+                    R.string.main_match_finished_message,
+                    winnerName,
+                    engine.team1Sets,
+                    engine.team2Sets
+                )
+            )
+            .setCancelable(false)
+            .setPositiveButton(R.string.main_match_finished_positive) { _, _ ->
+                engine.resetMatch()
+                onMatchChanged()
+            }
+            .setNegativeButton(R.string.main_match_finished_negative) { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun onMatchChanged() {
+        // Меняем только надписи: геометрия оверлея задаётся один раз в attach()
+        // (RootEncoder сдвигает спрайт при повторном setPosition/setScale).
+        overlay?.updateTexts(overlayState())
+        updateUi()
+    }
+
+    private fun overlayState(): ScoreOverlay.State = ScoreOverlay.State(
+        team1Name = settings.team1Name,
+        team2Name = settings.team2Name,
+        team1Score = engine.team1Score,
+        team2Score = engine.team2Score,
+        team1Sets = engine.team1Sets,
+        team2Sets = engine.team2Sets
+    )
+
+    private fun updateUi() {
+        binding.titleSet.text = if (engine.isMatchOver) {
+            getString(R.string.main_match_finished)
+        } else {
+            getString(R.string.main_set_label, engine.currentSetNumber)
+        }
+        binding.scoreCardFirst.text = engine.team1Score.toString()
+        binding.scoreCardSecond.text = engine.team2Score.toString()
+        binding.nameFirstTeam.text = settings.team1Name
+        binding.nameSecondTeam.text = settings.team2Name
+
+        // Полоски над табло — в тех же цветах, что и на оверлее трансляции.
+        binding.team1Accent.setBackgroundColor(settings.team1Color)
+        binding.team2Accent.setBackgroundColor(settings.team2Color)
+
+        // Верхняя строка — эфир: плашка только при реально установленном соединении
+        // (camera.isStreaming остаётся true и во время безуспешных переподключений).
+        val streaming = streamConnected
+        // Состояние записи берём из нашего дескриптора: camera.isRecording кратковременно false
+        // сразу после старта записи и при смене части, из-за чего плашка «Запись» пропадала.
+        val recording = isRecordingNow
+        binding.liveChip.visibility = if (streaming) View.VISIBLE else View.GONE
+
+        // Нижняя строка — запись в память: плашка и время файла видны только во время записи.
+        binding.recordChip.visibility = if (recording) View.VISIBLE else View.GONE
+        binding.recordTime.visibility = if (recording) View.VISIBLE else View.GONE
+        if (!recording) binding.recordTime.text = RECORD_TIME_ZERO
+        else updateRecordTime()
+
+        binding.streamBtn.setImageResource(
+            if (rtmpCamera2?.isStreaming == true) R.drawable.ic_pause else R.drawable.ic_link
+        )
+        binding.recordBtn.setImageResource(if (recording) R.drawable.ic_pause else R.drawable.ic_record)
+        binding.streamBtn.isEnabled = hasCameraAndAudioPermissions()
+        binding.recordBtn.isEnabled = hasCameraAndAudioPermissions()
+
+        // Без трансляции битрейт показывать нечего: в этом режиме работает только запись.
+        binding.bitrate.visibility = if (settings.broadcastEnabled) View.VISIBLE else View.GONE
+
+        // Пилюля битрейта не должна оставаться пустой: заполняем её, только если там ещё ничего нет,
+        // чтобы не затирать сообщение об ошибке авторизации.
+        if (binding.bitrate.text.isNullOrEmpty()) {
+            binding.bitrate.text = getString(R.string.main_bitrate_disabled)
+        }
+    }
+
+    private fun restoreMatchState(state: Bundle) {
+        if (!state.containsKey(STATE_TEAM1_SCORE)) return
+        engine.restore(
+            ScoreEngine.Snapshot(
+                team1Score = state.getInt(STATE_TEAM1_SCORE),
+                team2Score = state.getInt(STATE_TEAM2_SCORE),
+                team1Sets = state.getInt(STATE_TEAM1_SETS),
+                team2Sets = state.getInt(STATE_TEAM2_SETS),
+                setCompletionDeclined = state.getBoolean(STATE_DECLINED)
+            )
+        )
+    }
+
+    // ------------------------------------------------------- разрешения и поток
+
+    private fun hasCameraAndAudioPermissions(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun ensurePermissions() {
+        if (hasCameraAndAudioPermissions()) {
+            prepareStream()
+        } else {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+            )
+        }
+    }
+
+    private fun prepareStream() {
+        val camera = rtmpCamera2 ?: return
+        if (streamPrepared) return
+        if (!hasCameraAndAudioPermissions()) {
+            Log.w(TAG, "Нет разрешений камеры/микрофона — превью не запускаем")
+            updateUi()
+            return
+        }
+
+        if (!prepareEncoders(forStream = settings.broadcastEnabled)) {
+            toast(getString(R.string.main_stream_prepare_failed))
+            return
+        }
+
+        surfaceHolderCallback = object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                ensurePreview(camera)
+            }
+
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                try {
+                    camera.stopPreview()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Не удалось остановить превью", e)
+                }
+                previewRunning = false
+                stopEverything(showToasts = false)
+            }
+        }
+
+        binding.openGlView.holder.addCallback(surfaceHolderCallback)
+        streamPrepared = true
+
+        // Поверхность могла появиться раньше, чем мы подписались на её колбэки (например, пульт
+        // открыли уже после заполнения настроек): тогда surfaceCreated не придёт, и превью нужно
+        // поднимать самим.
+        if (binding.openGlView.holder.surface?.isValid == true) ensurePreview(camera)
+    }
+
+    /**
+     * Готовит энкодеры. Вызывать перед КАЖДЫМ запуском потока: `Camera2Base.stopStream()` вызывает
+     * `BaseEncoder.stop()`, который сбрасывает признак `prepared`, а `BaseEncoder.start()` без него
+     * бросает IllegalStateException («not prepared yet. You must call prepare method before start it»).
+     * Из-за этого повторное нажатие кнопки после остановки ничего не запускало.
+     *
+     * @param forStream готовим запуск эфира (а не запись без трансляции).
+     */
+    private fun prepareEncoders(forStream: Boolean): Boolean {
+        val camera = rtmpCamera2 ?: return false
+        // Второй энкодер записи имеет смысл, только если запись вообще разрешена в настройках:
+        // тогда её можно включить на ходу, не перезапуская эфир.
+        val recordingCapable = settings.saveVideoLocally
+        val streamBitrate = bitrateAdapter.targetBitrate
+        val recordBitrate = RecordingBitrate.bitsPerSecond(settings.recordBitrateMbps)
+        // Ориентация нужна, если передаём параметры энкодера записи вручную (11-аргументный
+        // prepareVideo): в коротких перегрузках библиотека подставляет её сама.
+        val rotation = CameraHelper.getCameraOrientation(this)
+
+        // Режимы:
+        //  • запись разрешена — всегда два энкодера: эфир 720p с битрейтом потока и запись 1080p
+        //    со своим битрейтом. RootEncoder включает второй энкодер, только когда разрешения
+        //    различаются (соотношение сторон обязано совпадать);
+        //  • запись выключена — один энкодер 1080p с битрейтом потока.
+        //
+        // Режим НЕ зависит от того, что запускают: размеры кадра остаются одинаковыми на весь
+        // сеанс. Иначе `prepareVideo()` видит, что ширина кадра не совпадает с шириной превью,
+        // и вызывает `stopPreview()` → `stopCamera()` — камера перезапускается, на экране чёрные
+        // кадры, плашка счёта мигает (проверено на устройстве).
+        val dual = recordingCapable
+        val videoPrepared = when {
+            dual -> camera.prepareVideo(
+                StreamConfig.STREAM_WIDTH,
+                StreamConfig.STREAM_HEIGHT,
+                StreamConfig.FPS,
+                streamBitrate,
+                StreamConfig.IFRAME_INTERVAL_SECONDS,
+                rotation,
+                -1,
+                -1,
+                StreamConfig.RECORD_WIDTH,
+                StreamConfig.RECORD_HEIGHT,
+                recordBitrate
+            )
+
+            forStream -> camera.prepareVideo(
+                StreamConfig.RECORD_WIDTH,
+                StreamConfig.RECORD_HEIGHT,
+                StreamConfig.FPS,
+                streamBitrate,
+                StreamConfig.IFRAME_INTERVAL_SECONDS,
+                rotation,
+                -1,
+                -1
+            )
+
+            else -> camera.prepareVideo(
+                StreamConfig.RECORD_WIDTH,
+                StreamConfig.RECORD_HEIGHT,
+                StreamConfig.FPS,
+                recordBitrate,
+                StreamConfig.IFRAME_INTERVAL_SECONDS,
+                rotation,
+                -1,
+                -1
+            )
+        }
+        // Полезно при разборе жалоб на качество/размер файла: видно, что и с каким битрейтом
+        // готовится и какой режим включён.
+        Log.i(
+            TAG,
+            if (dual) {
+                "prepareEncoders (${if (forStream) "эфир" else "запись"}): " +
+                    "эфир ${StreamConfig.STREAM_WIDTH}x${StreamConfig.STREAM_HEIGHT} " +
+                    "${streamBitrate / 1000} кбит/с + запись " +
+                    "${StreamConfig.RECORD_WIDTH}x${StreamConfig.RECORD_HEIGHT} " +
+                    "${recordBitrate / 1000} кбит/с (отдельные энкодеры)"
+            } else {
+                "prepareEncoders (${if (forStream) "эфир" else "запись"}): " +
+                    "${StreamConfig.RECORD_WIDTH}x${StreamConfig.RECORD_HEIGHT} " +
+                    "${streamBitrate / 1000} кбит/с, запись в настройках выключена"
+            }
+        )
+        val audioPrepared = camera.prepareAudio(
+            StreamConfig.AUDIO_BITRATE,
+            StreamConfig.AUDIO_SAMPLE_RATE,
+            StreamConfig.AUDIO_IS_STEREO,
+            StreamConfig.AUDIO_ECHO_CANCELER,
+            StreamConfig.AUDIO_NOISE_SUPPRESSOR
+        )
+        return videoPrepared && audioPrepared
+    }
+
+    /**
+     * Поднимает превью: `stopStream()`/`stopPreview()` закрывают камеру и останавливают GL-интерфейс.
+     * Сразу после запуска превью подключаем оверлей заново: фильтры, добавленные в остановленный
+     * GL-интерфейс, не отрисовываются — именно поэтому после свёртывания пропадала графика счёта.
+     */
+    private fun ensurePreview(camera: RtmpCamera2) {
+        if (previewRunning) return
+        if (!hasCameraAndAudioPermissions()) return
+        // Поверхность превью после запуска активити появляется не сразу. Если её ещё нет,
+        // startPreview падает с «Make sure the SurfaceView ... has a valid Surface» — ждём
+        // surfaceCreated: он вызовет этот же метод, когда поверхность будет готова.
+        if (binding.openGlView.holder.surface?.isValid != true) return
+        try {
+            camera.startPreview()
+            previewRunning = true
+            applyZoom()   // камера открылась заново — возвращаем прежний зум
+            applyVideoStabilization()   // и настройку стабилизации
+            applyExposure()             // и автоэкспозицию с поправкой яркости
+            attachOverlay()
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось запустить превью", e)
+        }
+    }
+
+    /** (Пере)подключает оверлей счёта к текущему GL-интерфейсу. */
+    private fun attachOverlay() {
+        val currentOverlay = overlay ?: return
+        currentOverlay.attach(overlayState(), settings.team1Color, settings.team2Color)
+    }
+
+    /**
+     * Обновляет оверлей после старта/остановки записи и эфира.
+     *
+     * `prepareVideo()` → `startEncoders()` → `prepareGlView()` пересобирает GL: надписи нужно
+     * перерисовать в новом контексте, иначе пропадают названия команд и цифры счёта, хотя фон
+     * плашки остаётся. Фильтры при этом НЕ пересоздаются (правило: создаются один раз при
+     * открытии активити) — [ScoreOverlay.attach] только обновляет текст и цвета, поэтому мигания нет.
+     */
+    private fun refreshOverlay() {
+        val currentOverlay = overlay ?: return
+        currentOverlay.attach(overlayState(), settings.team1Color, settings.team2Color)
+    }
+
+    /**
+     * Возвращает превью и оверлей после `prepareVideo()`.
+     *
+     * `Camera2Base.prepareVideo()` при работающем превью и несовпадении размера кадра с размером
+     * превью вызывает `stopPreview()` → `stopCamera()`: GL-интерфейс останавливается, камера
+     * закрывается, `onPreview` становится false. Наш флаг [previewRunning] при этом остаётся true,
+     * поэтому [ensurePreview] молча выходил — синхронизируем флаг с библиотекой.
+     */
+    private fun refreshPreviewAfterPrepare(camera: RtmpCamera2) {
+        previewRunning = camera.isOnPreview
+        if (previewRunning) {
+            // Превью живо — надписи уже подключены, достаточно обновить текст.
+            refreshOverlay()
+        } else {
+            ensurePreview(camera)
+        }
+    }
+
+    /**
+     * Возвращает превью и графику после остановки потока: библиотека закрывает камеру и глушит GL.
+     * Небольшая задержка нужна, чтобы камера успела закрыться после `stopStream()`.
+     */
+    private fun restorePreviewAfterStop() {
+        if (binding.openGlView.holder.surface?.isValid != true) return
+        rtmpCamera2?.let { ensurePreview(it) }
+    }
+
+    /**
+     * Поднимает превью после teardown, который библиотека делает при остановке записи или эфира.
+     *
+     * Делаем несколько быстрых попыток подряд: первая успешная выставляет [previewRunning], и все
+     * следующие сразу выходят. Так картинка возвращается настолько быстро, насколько успевает
+     * открыться камера, и мигание не растягивается на фиксированные 300 мс.
+     */
+    private fun restorePreviewSoon() {
+        previewRunning = false
+        PREVIEW_RESTORE_DELAYS_MS.forEach { delayMs ->
+            handler.postDelayed({
+                if (!isFinishing && !isDestroyed) restorePreviewAfterStop()
+            }, delayMs)
+        }
+    }
+
+    /**
+     * Разворачивает превью почти на весь экран — до нижней панели управления, чтобы кнопки
+     * «стоп» и «настройки» не перекрывались картинкой. Карточки команд и подпись партии скрываются.
+     */
+    private fun setPreviewFullscreen(fullscreen: Boolean) {
+        previewFullscreen = fullscreen
+        val preview = binding.openGlView
+
+        // Всегда работаем с копиями: если отдать представлению сохранённый объект,
+        // следующий разворот изменит именно его — и свернуть превью будет уже нечем.
+        val collapsed = collapsedPreviewParams
+        if (collapsed == null) {
+            Log.w(TAG, "Исходные параметры превью не сохранены — беру текущие")
+        }
+        val params = ConstraintLayout.LayoutParams(
+            collapsed ?: (preview.layoutParams as ConstraintLayout.LayoutParams)
+        )
+
+        if (fullscreen) {
+            params.width = ConstraintLayout.LayoutParams.MATCH_PARENT
+            params.height = ConstraintLayout.LayoutParams.MATCH_PARENT
+            params.dimensionRatio = null
+            params.matchConstraintPercentWidth = 1f
+            params.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+            params.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+            // Панель управления в полном экране скрыта, поэтому превью занимает весь экран.
+            params.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            params.bottomToTop = ConstraintLayout.LayoutParams.UNSET
+            params.setMargins(0, 0, 0, 0)
+        }
+        preview.layoutParams = params
+
+        val mode = if (fullscreen) "развёрнуто до панели" else "обычный размер (${params.matchConstraintPercentWidth})"
+        Log.d(TAG, "Превью: $mode")
+
+        // В полном экране не остаётся элементов управления: только полупрозрачная кнопка
+        // сворачивания поверх видео.
+        val controlsVisibility = if (fullscreen) View.GONE else View.VISIBLE
+        binding.titleSet.visibility = controlsVisibility
+        binding.cardFirstTeam.visibility = controlsVisibility
+        binding.cardSecondTeam.visibility = controlsVisibility
+        binding.card1.visibility = controlsVisibility
+        binding.card2.visibility = controlsVisibility
+        binding.bottomLayout.visibility = controlsVisibility
+        binding.collapseBtn.visibility = if (fullscreen) View.VISIBLE else View.GONE
+
+        // Зум доступен только в полном экране и только если камера его поддерживает.
+        val zoomVisibility = if (fullscreen && zoomRangeOrNull() != null) View.VISIBLE else View.GONE
+        binding.zoomInBtn.visibility = zoomVisibility
+        binding.zoomOutBtn.visibility = zoomVisibility
+        if (!fullscreen) stopZoomHold()   // вышли из полного экрана — удержание не продолжаем
+    }
+
+    /** Диапазон зума камеры или null, если он недоступен (камера закрыта или зум не поддерживается). */
+    private fun zoomRangeOrNull(): Range<Float>? = try {
+        rtmpCamera2?.getZoomRange()
+    } catch (e: Exception) {
+        Log.w(TAG, "Не удалось получить диапазон зума", e)
+        null
+    }
+
+    /**
+     * Плавный зум при удержании: пока палец на кнопке, значение меняется каждые [ZOOM_TICK_MS]
+     * маленьким шагом, а после [ZOOM_ACCELERATE_AFTER_MS] удержания шаг ускоряется.
+     */
+    private fun startZoomHold(direction: Int) {
+        stopZoomHold()
+        if (zoomRangeOrNull() == null) return
+
+        zoomHoldDirection = direction
+        zoomHoldStartedAt = SystemClock.elapsedRealtime()
+        zoomHoldTicks = 0
+
+        val tick = object : Runnable {
+            override fun run() {
+                if (!applyZoomHoldTick()) return
+                handler.postDelayed(this, ZOOM_TICK_MS)
+            }
+        }
+        zoomHoldRunnable = tick
+        handler.post(tick)
+    }
+
+    private fun stopZoomHold() {
+        zoomHoldRunnable?.let { handler.removeCallbacks(it) }
+        zoomHoldRunnable = null
+    }
+
+    /** Один шаг удержания; false — упёрлись в границу диапазона, дальше крутить нечего. */
+    private fun applyZoomHoldTick(): Boolean {
+        val range = zoomRangeOrNull() ?: return false
+        if (range.upper <= range.lower) return false
+
+        val held = SystemClock.elapsedRealtime() - zoomHoldStartedAt
+        val speed = if (held >= ZOOM_ACCELERATE_AFTER_MS) ZOOM_ACCELERATED_SPEED else 1f
+        val step = (range.upper - range.lower) * ZOOM_STEP_PER_TICK * speed
+
+        val next = (currentZoom + zoomHoldDirection * step).coerceIn(range.lower, range.upper)
+        if (next == currentZoom) return false
+
+        currentZoom = next
+        zoomHoldTicks++
+        applyZoom()
+        return true
+    }
+
+    /** Касания кнопок зума: интересны только начало и конец удержания. */
+    private fun handleZoomTouch(event: MotionEvent, direction: Int): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> startZoomHold(direction)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopZoomHold()
+        }
+        // false — чтобы кнопка сама показала нажатие и отправила обычный click.
+        return false
+    }
+
+    /** Один шаг зума кнопками «+» / «−»: 1 — приблизить, -1 — отдалить. */
+    private fun zoomStep(direction: Int) {
+        val range = zoomRangeOrNull() ?: return
+        if (range.upper <= range.lower) {
+            Log.w(TAG, "Камера не поддерживает зум")
+            return
+        }
+
+        val step = ((range.upper - range.lower) / ZOOM_STEPS).coerceAtLeast(MIN_ZOOM_STEP)
+        val next = (currentZoom + direction * step).coerceIn(range.lower, range.upper)
+        if (next != currentZoom) {
+            currentZoom = next
+            applyZoom()
+        }
+    }
+
+    /**
+     * Автоэкспозиция и поправка яркости. В настройках поправка хранится в процентах (-100…100),
+     * а камера принимает её в своих шагах (`getMinExposure()`…`getMaxExposure()`), поэтому
+     * проценты раскладываются по диапазону конкретного устройства.
+     */
+    private fun applyExposure() {
+        val camera = rtmpCamera2 ?: return
+        try {
+            if (!settings.autoExposure) {
+                if (camera.isAutoExposureEnabled) {
+                    camera.disableAutoExposure()
+                    Log.i(TAG, "Автоэкспозиция выключена")
+                }
+                return
+            }
+
+            if (!camera.isAutoExposureEnabled && !camera.enableAutoExposure()) {
+                Log.w(TAG, "Устройство не поддерживает автоэкспозицию")
+                return
+            }
+
+            val min = camera.minExposure
+            val max = camera.maxExposure
+            val percent = settings.exposureCompensation
+            val value = (if (percent >= 0) max * percent / 100 else min * -percent / 100)
+                .coerceIn(min, max)
+
+            if (camera.exposure != value) {
+                camera.setExposure(value)
+                Log.i(TAG, "Экспозиция: $value (поправка $percent%, диапазон $min..$max)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось применить экспозицию", e)
+        }
+    }
+
+    /**
+     * Включает или выключает стабилизацию изображения по настройке. Вызывается, когда камера уже
+     * открыта (после `startPreview()`), и при возврате на пульт — настройку могли изменить.
+     */
+    private fun applyVideoStabilization() {
+        val camera = rtmpCamera2 ?: return
+        try {
+            if (settings.videoStabilization) {
+                if (camera.enableVideoStabilization()) {
+                    Log.i(TAG, "Стабилизация изображения включена")
+                } else {
+                    Log.w(TAG, "Устройство не поддерживает стабилизацию изображения")
+                    if (!stabilizationWarningShown) {
+                        stabilizationWarningShown = true
+                        toast(getString(R.string.stabilization_not_supported))
+                    }
+                }
+            } else if (camera.isVideoStabilizationEnabled) {
+                camera.disableVideoStabilization()
+                Log.i(TAG, "Стабилизация изображения выключена")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось применить стабилизацию", e)
+        }
+    }
+
+    /** Применяет текущий зум к камере, если устройство его поддерживает. */
+    private fun applyZoom() {
+        val camera = rtmpCamera2 ?: return
+        try {
+            val range = camera.getZoomRange()
+            if (range == null) {
+                Log.w(TAG, "Камера не поддерживает зум")
+                return
+            }
+            val clamped = currentZoom.coerceIn(range.lower, range.upper)
+            currentZoom = clamped
+            camera.setZoom(clamped)
+            Log.d(TAG, "Зум камеры: $clamped (диапазон ${range.lower}..${range.upper})")
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось применить зум", e)
+        }
+    }
+
+    /** Верхняя строка пульта: включить или выключить эфир. Запись не трогаем. */
+    private fun toggleBroadcast() {
+        val camera = rtmpCamera2 ?: return
+        if (camera.isStreaming) {
+            // Библиотека считает поток запущенным и во время попыток подключения — гасим его,
+            // запись при этом продолжается.
+            stopStreamOnly()
+            updateUi()
+            return
+        }
+        if (!settings.broadcastEnabled) {
+            toast(getString(R.string.main_nothing_selected))
+            startActivity(Intent(this, SettingsActivity::class.java))
+            return
+        }
+        startBroadcast()
+    }
+
+    /** Нижняя строка пульта: включить или выключить запись в память. Эфир не трогаем. */
+    private fun toggleRecording() {
+        val camera = rtmpCamera2 ?: return
+        if (isRecordingNow) {
+            stopRecording()
+            return
+        }
+        if (!settings.saveVideoLocally) {
+            toast(getString(R.string.main_recording_disabled))
+            startActivity(Intent(this, SettingsActivity::class.java))
+            return
+        }
+        startRecording()
+    }
+
+    /**
+     * Запись без эфира: готовим энкодеры и превью сами. Во время трансляции энкодеры уже
+     * готовы (если запись включена в настройках — с отдельным энкодером записи).
+     */
+    private fun startRecording() {
+        val camera = rtmpCamera2 ?: return
+        if (!camera.isStreaming) {
+            if (!prepareEncoders(forStream = false)) {
+                toast(getString(R.string.main_stream_prepare_failed))
+                return
+            }
+            refreshPreviewAfterPrepare(camera)
+        }
+        recordingPart = 0
+        if (!startLocalRecording()) return
+        // startRecord() при отсутствии эфира пересобирает GL: возвращаем надписи без
+        // clearFilters(), чтобы плашка не мигала.
+        refreshOverlay()
+        updateUi()
+    }
+
+    /** Останавливает только запись: трансляция продолжается. */
+    private fun stopRecording() {
+        if (rtmpCamera2 == null) return
+        if (!isRecordingNow) return
+        handler.removeCallbacks(recordTicker)
+        splitRunnable?.let { handler.removeCallbacks(it) }
+        splitRunnable = null
+        try {
+            rtmpCamera2?.stopRecord()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка остановки записи", e)
+        }
+        val hadActiveRecording = recorder?.isActive == true
+        if (recorder?.stop() == true) {
+            toast(getString(R.string.main_recording_saved))
+        } else if (hadActiveRecording) {
+            Log.w(TAG, "Файл записи не опубликован в MediaStore")
+        }
+        recordingPart = 0
+        // Без эфира stopRecord() внутри библиотеки вызывает stopStream() — полный teardown:
+        // GL остановлен, камера закрыта. Возвращаем превью и оверлей без лишней паузы.
+        if (rtmpCamera2?.isStreaming != true) restorePreviewSoon()
+        updateUi()
+    }
+
+    private fun startBroadcast() {
+        val camera = rtmpCamera2 ?: return
+        val url = settings.fullRtmpUrl
+        if (url.isBlank()) {
+            toast(getString(R.string.main_stream_url_missing))
+            startActivity(Intent(this, SettingsActivity::class.java))
+            return
+        }
+
+        if (!streamPrepared) prepareStream()
+        if (!streamPrepared) return
+
+        // Запуск эфира требует переподготовки энкодеров, а это порвало бы текущий файл записи.
+        // Поэтому закрываем его штатно и после старта потока начинаем новую часть.
+        val wasRecording = isRecordingNow
+        if (wasRecording) {
+            Log.i(TAG, "Старт эфира во время записи: закрываю текущую часть и начну новую")
+            stopRecording()
+            recordingPart = 0
+        }
+
+        // Перед каждым запуском: stopStream() сбрасывает prepared у энкодеров и закрывает камеру.
+        if (!prepareEncoders(forStream = true)) {
+            toast(getString(R.string.main_stream_prepare_failed))
+            return
+        }
+        refreshPreviewAfterPrepare(camera)
+
+        retryCount = 0
+        // Новая сессия: с этого момента обрыв связи снова повод поднимать поток заново.
+        userStoppedStream = false
+        streamConnected = false
+        try {
+            camera.startStream(url)
+        } catch (e: IllegalStateException) {
+            // Библиотека успевает выставить streaming = true до падения: возвращаем чистое состояние.
+            Log.e(TAG, "startStream: энкодеры не подготовлены", e)
+            toast(getString(R.string.main_stream_prepare_failed))
+            stopEverything(showToasts = false)
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось начать трансляцию", e)
+            toast(getString(R.string.main_stream_prepare_failed))
+            stopEverything(showToasts = false)
+            return
+        }
+
+        // startStream() пересобирает GL под энкодеры — возвращаем надписи без мигания.
+        refreshOverlay()
+
+        // Если запись шла до старта эфира — продолжаем её новой частью (старая закрыта выше).
+        if (wasRecording) startLocalRecording()
+
+        bitrateAdapter.reset(SystemClock.elapsedRealtime(), safeBytesSent(camera))
+        handler.removeCallbacks(bitrateTicker)
+        handler.postDelayed(bitrateTicker, BitrateAdapter.UPDATE_INTERVAL_MS)
+
+        updateUi()
+        toast(getString(R.string.main_stream_started))
+    }
+
+    /** Запускает локальную запись — первую или следующую часть. @return true, если пишем. */
+    private fun startLocalRecording(): Boolean {
+        val camera = rtmpCamera2 ?: return false
+        if (recorder?.isActive == true) return true
+
+        if (recordingPart < 1) recordingPart = 1
+        val descriptor = recorder?.start(RecordingParts.fileName(buildRecordingBaseName(), recordingPart))
+        if (descriptor == null) {
+            toast(getString(R.string.main_recording_failed))
+            return false
+        }
+        return try {
+            camera.startRecord(descriptor)
+            toast(getString(R.string.main_recording_started))
+            startRecordTimer()
+            scheduleRecordingSplit()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось начать запись", e)
+            recorder?.discard()
+            toast(getString(R.string.main_recording_failed))
+            false
+        }
+    }
+
+    /** Запускает секундный счётчик времени записи для нижней строки пульта. */
+    private fun startRecordTimer() {
+        recordingStartedAtMs = SystemClock.elapsedRealtime()
+        handler.removeCallbacks(recordTicker)
+        handler.post(recordTicker)
+        updateRecordTime()
+    }
+
+    /** Обновляет «00:42» в нижней строке: время текущего файла. */
+    private fun updateRecordTime() {
+        if (recorder?.isActive != true) return
+        val elapsedMs = SystemClock.elapsedRealtime() - recordingStartedAtMs
+        val minutes = elapsedMs / 60_000
+        val seconds = (elapsedMs / 1_000) % 60
+        binding.recordTime.text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+    }
+
+    private fun buildRecordingBaseName(): String {
+        val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault()).format(Date())
+        val names = listOf(settings.team1Name, settings.team2Name)
+            .filter { it.isNotBlank() }
+            .joinToString("_")
+        return if (names.isBlank()) stamp else "${names}_$stamp"
+    }
+
+    /**
+     * Планирует закрытие текущей части записи. Части режутся остановкой и повторным запуском
+     * записи: поток при этом не трогаем, каждый файл корректно закрывается.
+     */
+    private fun scheduleRecordingSplit() {
+        splitRunnable?.let { handler.removeCallbacks(it) }
+        splitRunnable = null
+
+        val interval = RecordingParts.intervalMs(settings.splitMinutes) ?: return
+        val task = Runnable {
+            splitRunnable = null
+            splitRecordingNow()
+        }
+        splitRunnable = task
+        handler.postDelayed(task, interval)
+        Log.i(TAG, "Следующая часть записи через ${settings.splitMinutes} мин")
+    }
+
+    /** Закрывает текущую часть записи и сразу начинает следующую. */
+    private fun splitRecordingNow() {
+        val camera = rtmpCamera2 ?: return
+        if (!isRecordingNow) return
+
+        Log.i(TAG, "Закрываю часть $recordingPart записи и начинаю следующую")
+        try {
+            camera.stopRecord()
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось закрыть часть записи", e)
+        }
+        recorder?.stop()
+        recordingPart++
+        startLocalRecording()
+    }
+
+    /**
+     * Останавливает трансляцию и запись.
+     *
+     * Порядок как в исходной версии приложения: сначала стоп потока, затем записи. Так
+     * `Camera2Base.stopStream()` видит активную запись и пропускает ветку полного teardown —
+     * в ней библиотека глушит GL, закрывает камеру и сбрасывает у энкодеров признак `prepared`.
+     * Благодаря этому превью и графика счёта остаются на экране, а повторный запуск не требует
+     * «починки» состояния.
+     */
+    private fun stopEverything(showToasts: Boolean) {
+        val camera = rtmpCamera2
+        handler.removeCallbacks(bitrateTicker)
+        handler.removeCallbacks(recordTicker)
+        handler.removeCallbacks(hardRestartRunnable)
+        splitRunnable?.let { handler.removeCallbacks(it) }
+        splitRunnable = null
+
+        // Останавливаем по своей воле (кнопка, onPause, гибель поверхности): запоздавшие
+        // onDisconnect/onConnectionFailed не должны поднимать поток заново. Флаг снимется
+        // при следующем явном запуске.
+        userStoppedStream = true
+        streamConnected = false
+
+        // Фиксируем до остановки: именно от этого зависит ветка внутри stopStream().
+        val streamStoppedWhileRecording = isRecordingNow
+
+        if (camera?.isStreaming == true) {
+            if (showToasts) toast(getString(R.string.main_stream_stopping))
+            try {
+                camera.stopStream()
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка остановки трансляции", e)
+            }
+            // Запись была активна → teardown пропущен → превью и GL продолжают работать.
+            previewRunning = streamStoppedWhileRecording
+        }
+
+        if (isRecordingNow) {
+            if (showToasts) toast(getString(R.string.main_recording_stopping))
+            try {
+                camera?.stopRecord()
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка остановки записи", e)
+            }
+        }
+
+        val hadActiveRecording = recorder?.isActive == true
+        if (recorder?.stop() == true) {
+            toast(getString(R.string.main_recording_saved))
+        } else if (hadActiveRecording) {
+            Log.w(TAG, "Файл записи не опубликован в MediaStore")
+        }
+        recordingPart = 0
+        // Флаг не сбрасываем: onDisconnect() придёт уже после возврата из stopStream() и должен
+        // знать, что поток остановлен нами. Снимется при следующем запуске.
+        streamHardRestartCount = 0
+
+        updateUi()
+    }
+
+    private fun updateBitrateStats(camera: RtmpCamera2) {
+        val stats = bitrateAdapter.onStats(SystemClock.elapsedRealtime(), safeBytesSent(camera)) ?: return
+
+        binding.bitrate.text = getString(
+            R.string.main_bitrate_stats,
+            bitrateAdapter.targetBitrate / MEGABIT,
+            stats.actualBitrate / MEGABIT
+        )
+
+        stats.newTargetBitrate?.let { newBitrate ->
+            try {
+                camera.setVideoBitrateOnFly(newBitrate)
+            } catch (e: Exception) {
+                Log.e(TAG, "Не удалось изменить битрейт на лету", e)
+            }
+        }
+    }
+
+    private fun safeBytesSent(camera: RtmpCamera2): Long = try {
+        camera.streamClient.getBytesSend()
+    } catch (e: Exception) {
+        Log.w(TAG, "Статистика отправки недоступна", e)
+        0L
+    }
+
+    /**
+     * Отступы безопасной зоны. В ландшафте вырез фронтальной камеры оказывается слева или справа
+     * (на этом устройстве 72 px = 24 dp), а скруглённые углы экрана срезают по 30 px = 10 dp
+     * в каждом углу. Поэтому контент отодвигаем со всех сторон, а не только снизу: иначе вырез
+     * съедает часть превью, а углы подрезают табло.
+     */
+    private fun applyWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val safe = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val corner = resources.getDimensionPixelSize(R.dimen.safe_area_corner)
+            val left = safe.left + corner
+            val top = safe.top + corner
+            val right = safe.right + corner
+            val bottom = safe.bottom + corner
+
+            view.updatePadding(left = left, top = top, right = right, bottom = bottom)
+            Log.i(TAG, "Безопасная зона: слева $left, сверху $top, справа $right, снизу $bottom px")
             insets
         }
     }
+
+    // ------------------------------------------------------------- колбэки RTMP
+
+    override fun onConnectionStarted(url: String) {
+        streamConnected = false
+        postToUi { updateUi() }
+    }
+
+    override fun onConnectionSuccess() {
+        // Связь восстановилась — счётчики перезапусков больше не нужны.
+        streamConnected = true
+        streamHardRestartCount = 0
+        retryCount = 0
+        Log.i(TAG, "onConnectionSuccess")
+        // Плашка «В эфире» должна появиться сразу, не дожидаясь следующего изменения счёта.
+        postToUi { updateUi() }
+    }
+
+    override fun onConnectionFailed(reason: String) {
+        val camera = rtmpCamera2 ?: return
+        // Соединение гасили мы сами — переподключаться не нужно. Проверять здесь camera.isStreaming
+        // нельзя: библиотека выставляет streaming = true ещё до установки соединения, и такая
+        // проверка отключала бы любые попытки переподключения.
+        if (userStoppedStream) return
+
+        streamConnected = false
+        Log.i(TAG, "onConnectionFailed: $reason (попытка $retryCount)")
+        postToUi {
+            toast(getString(R.string.main_stream_connection_failed, reason))
+            binding.bitrate.text = getString(R.string.main_bitrate_disabled)
+            // Соединения нет — сразу убираем плашку «В эфире», а не по следующему клику по счёту.
+            updateUi()
+        }
+
+        if (retryCount < MAX_RETRIES) {
+            retryCount++
+            tryReconnect(camera, reason)
+        } else {
+            // Свои попытки исчерпаны — пробуем поднять поток заново (или только переподключиться,
+            // если идёт запись).
+            scheduleHardStreamRestart()
+        }
+    }
+
+    /**
+     * Одна попытка переподключения клиента без остановки энкодеров.
+     *
+     * `reTry()` работает только когда у клиента есть запас попыток: `shouldRetry()` проверяет
+     * `doingRetry` и `reTries > 0`, а `reTries` выставляется лишь вызовом `setReTries()`. Без него
+     * `reTry()` молча ничего не делает — поэтому перед каждой попыткой ставим одну.
+     */
+    private fun tryReconnect(camera: RtmpCamera2, reason: String): Boolean = try {
+        camera.streamClient.setReTries(1)
+        camera.streamClient.reTry(RETRY_DELAY_MS, reason)
+    } catch (e: Exception) {
+        Log.e(TAG, "Не удалось запланировать переподключение", e)
+        false
+    }
+
+    override fun onNewBitrate(bitrate: Long) = Unit
+
+    override fun onDisconnect() {
+        val camera = rtmpCamera2
+        // Соединения больше нет — фиксируем это до постановки в очередь, чтобы запоздавшие
+        // проверки не приняли живой поток за оборванный (и наоборот).
+        streamConnected = false
+        // Полезно при разборе жалоб «эфир сам вернулся»: видно, чья это была остановка.
+        Log.i(TAG, "onDisconnect: своя остановка=$userStoppedStream, поток идёт=${camera?.isStreaming}")
+        postToUi {
+            binding.bitrate.text = getString(R.string.main_bitrate_disabled)
+            // Плашка «В эфире» гаснет сразу при обрыве, а не по следующему изменению счёта.
+            updateUi()
+            // Остановка по нашей воле или уже поднятая заново сессия — перезапускать нечего.
+            if (userStoppedStream || streamConnected) return@postToUi
+
+            // Обрыв не по нашей воле: запись продолжаем, поток поднимаем заново.
+            val recording = isRecordingNow
+            toast(
+                getString(
+                    if (recording) R.string.main_stream_lost_keep_recording else R.string.main_stream_lost
+                )
+            )
+            scheduleHardStreamRestart()
+        }
+    }
+
+    override fun onAuthError() {
+        postToUi {
+            toast(getString(R.string.main_stream_auth_error))
+            binding.bitrate.text = getString(R.string.main_bitrate_auth_error)
+            // Ключ или доступ неверны: переподключаться бессмысленно, но запись не бросаем.
+            stopStreamOnly()
+        }
+    }
+
+    override fun onAuthSuccess() {
+        retryCount = 0
+        postToUi { toast(getString(R.string.main_stream_auth_ok)) }
+    }
+
+    /** Гасит только трансляцию, не трогая локальную запись. */
+    private fun stopStreamOnly() {
+        val camera = rtmpCamera2 ?: return
+        if (!camera.isStreaming) return
+        // Остановка по нашей воле: запоздавший onDisconnect() не должен поднимать поток заново.
+        userStoppedStream = true
+        streamConnected = false
+        try {
+            camera.stopStream()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка остановки трансляции", e)
+        }
+        // Без активной записи stopStream() делает полный teardown: глушит GL и закрывает камеру,
+        // поэтому флаг превью больше не соответствует действительности — поднимаем картинку заново.
+        if (!isRecordingNow) restorePreviewSoon()
+        updateUi()
+    }
+
+    /** Планирует перезапуск потока «с нуля», если попытки ещё остались. */
+    private fun scheduleHardStreamRestart() {
+        if (!settings.broadcastEnabled) return
+        // Во время записи пересоздавать энкодеры нельзя — файл пишется теми же кодеками.
+        // Поэтому в этом режиме делаем больше попыток переподключения и не трогаем кодеки.
+        val recording = isRecordingNow
+        val limit = if (recording) MAX_RESTARTS_WHILE_RECORDING else MAX_HARD_RESTARTS
+        if (streamHardRestartCount >= limit) {
+            postToUi {
+                toast(
+                    getString(
+                        if (recording) R.string.main_stream_retry_exhausted_recording
+                        else R.string.main_stream_retry_exhausted
+                    )
+                )
+            }
+            return
+        }
+        streamHardRestartCount++
+        handler.removeCallbacks(hardRestartRunnable)
+        handler.postDelayed(hardRestartRunnable, HARD_RESTART_DELAY_MS)
+        Log.i(
+            TAG,
+            "Перезапуск потока №$streamHardRestartCount из $limit через $HARD_RESTART_DELAY_MS мс" +
+                if (recording) " (запись идёт — только переподключение)" else ""
+        )
+    }
+
+    /**
+     * Поднимает поток заново.
+     *
+     * Если идёт запись, энкодеры пересоздавать нельзя: эфир и файл кодируются одними и теми же
+     * кодеками, и повторный `startStream()` их перезапустил бы — файл бы порвался. В этом режиме
+     * ограничиваемся переподключением клиента (`reTry`), которое кодеки не трогает.
+     */
+    private fun restartStreamFromScratch() {
+        val camera = rtmpCamera2 ?: return
+        if (!settings.broadcastEnabled) return
+        // Соединение действительно живо (например, библиотека успела переподключиться сама).
+        // Проверять camera.isStreaming нельзя: он остаётся true и после неудачного подключения.
+        if (streamConnected) return
+        val url = settings.fullRtmpUrl
+        if (url.isBlank()) return
+
+        if (isRecordingNow) {
+            // Энкодеры заняты записью: пересоздавать их нельзя. Только переподключение клиента.
+            val scheduled = tryReconnect(camera, "переподключение без остановки записи")
+            Log.i(TAG, "Переподключение без остановки записи, попытка $streamHardRestartCount: $scheduled")
+            return
+        }
+
+        // Соединение гасили снаружи, а записи нет — значит stopStream() прошёл полный teardown,
+        // закрыл камеру и GL. Без сброса флага ensurePreview() ничего бы не сделал.
+        previewRunning = false
+        ensurePreview(camera)
+        if (!prepareEncoders(forStream = true)) return
+        // Поднимаем новую сессию: обрыв уже обработан, флаг «остановлено пользователем» снимаем.
+        userStoppedStream = false
+        retryCount = 0
+        try {
+            camera.startStream(url)
+        } catch (e: Exception) {
+            Log.e(TAG, "Перезапуск трансляции не удался", e)
+        }
+    }
+
+    /** Колбэки ConnectChecker приходят из потока RTMP-клиента: View трогаем только в UI-потоке. */
+    private fun postToUi(action: () -> Unit) {
+        // Колбэк может прийти уже после onDestroy(): библиотека гасит соединение в корутине.
+        if (isFinishing || isDestroyed) return
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            if (!isFinishing && !isDestroyed) action()
+        } else {
+            handler.post {
+                if (!isFinishing && !isDestroyed) action()
+            }
+        }
+    }
+
+    private fun toast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private companion object {
+        const val TAG = "MainActivity"
+
+        const val MEGABIT = 1024.0 * 1024.0
+
+        /** Сколько раз пробуем поднять поток «с нуля» после исчерпания автопереподключений. */
+        const val MAX_HARD_RESTARTS = 3
+
+        /**
+         * Пока идёт запись, энкодеры не пересоздаются — делаем только переподключение клиента.
+         * Это дешевле, поэтому попыток больше: файл всё равно пишется, ждать нечего терять.
+         */
+        const val MAX_RESTARTS_WHILE_RECORDING = 12
+
+        /** Пауза перед перезапуском потока. */
+        const val HARD_RESTART_DELAY_MS = 5_000L
+
+        /** Экран настроек уже открыт — переживает пересоздание активити. */
+        const val STATE_AWAITING_SETTINGS = "state_awaiting_settings"
+
+        const val MAX_RETRIES = 3
+        const val RETRY_DELAY_MS = 5000L
+
+        /** Пауза перед повторным подключением оверлея после старта записи/эфира. */
+        const val OVERLAY_REATTACH_DELAY_MS = 500L
+
+        /** Попытки вернуть превью после teardown библиотеки: первая успешная отменяет остальные. */
+        val PREVIEW_RESTORE_DELAYS_MS = longArrayOf(0L, 120L, 300L, 600L)
+
+        /** Раз в секунду обновляем время записи в нижней строке пульта. */
+        const val RECORD_TICK_MS = 1_000L
+
+        /** Значение таймера записи, когда файл ещё не пишется. */
+        const val RECORD_TIME_ZERO = "00:00"
+
+        /** На сколько шагов делится диапазон зума при нажатии «+» / «−». */
+        const val ZOOM_STEPS = 10f
+
+        /** Минимальный шаг зума на случай очень узкого диапазона. */
+        const val MIN_ZOOM_STEP = 0.1f
+
+        /** Период обновления зума при удержании: 20 раз в секунду — плавно и без нагрузки на камеру. */
+        const val ZOOM_TICK_MS = 50L
+
+        /** Доля диапазона за один тик удержания. */
+        const val ZOOM_STEP_PER_TICK = 0.02f
+
+        /** После этого времени удержания зум начинает ускоряться. */
+        const val ZOOM_ACCELERATE_AFTER_MS = 600L
+
+        /** Во сколько раз ускоряется зум при долгом удержании. */
+        const val ZOOM_ACCELERATED_SPEED = 2.5f
+
+        const val STATE_TEAM1_SCORE = "state_team1_score"
+        const val STATE_TEAM2_SCORE = "state_team2_score"
+        const val STATE_TEAM1_SETS = "state_team1_sets"
+        const val STATE_TEAM2_SETS = "state_team2_sets"
+        const val STATE_DECLINED = "state_set_declined"
+    }
 }
+
+
+

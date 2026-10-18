@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="control_bar_height">72dp</dimen>
+    <!-- Запас на скруглённые углы экрана: у WP55Pro радиус угла 30 px (10 dp). -->
+    <dimen name="safe_area_corner">12dp</dimen>
+    <dimen name="color_swatch_size">44dp</dimen>
+    <dimen name="color_swatch_margin">4dp</dimen>
+    <dimen name="color_swatch_stroke">3dp</dimen>
+    <dimen name="team_card_stroke">2dp</dimen>
+</resources>

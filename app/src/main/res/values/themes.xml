@@ -1,9 +1,20 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- Базовая тема приложения. -->
     <style name="Base.Theme.SportStreamer" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <!-- Разрешаем рисовать в области выреза камеры: отступы под него ставит MainActivity
+             через WindowInsets, иначе в ландшафте система добавляла бы чёрную полосу. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorSecondary">@color/accent</item>
     </style>
 
     <style name="Theme.SportStreamer" parent="Base.Theme.SportStreamer" />
+
+    <!--
+        Тема загрузочного экрана. На Android 11 и старше здесь только тёмный фон;
+        на Android 12+ иконку и фон задаёт values-v31/themes.xml.
+    -->
+    <style name="Theme.SportStreamer.Splash" parent="Theme.SportStreamer">
+        <item name="android:windowBackground">#FF060709</item>
+    </style>
 </resources>

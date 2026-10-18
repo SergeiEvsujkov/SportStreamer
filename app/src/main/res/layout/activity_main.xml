@@ -1,19 +1,482 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Пульт трансляции. Раскладка под ландшафт: слева превью камеры и номер партии,
+    справа табло команд, снизу панель управления.
+    Все идентификаторы, к которым обращается MainActivity, сохранены.
+    Фон корня совпадает с панелью управления — тогда отступы безопасной зоны
+    (вырез камеры и скруглённые углы) по краям не выделяются светлыми полосами.
+-->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:background="?attr/colorSurfaceContainerHigh"
+    android:clipToPadding="false">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Подложка превью: рисуется за кадром и видна как скруглённая рамка вокруг видео. -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/previewFrame"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="-8dp"
+        android:layout_marginBottom="-8dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerHighest"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="0dp"
+        app:layout_constraintBottom_toBottomOf="@id/openGlView"
+        app:layout_constraintEnd_toEndOf="@id/openGlView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:strokeWidth="0dp" />
+
+    <!-- Превью небольшое (40% ширины): остальное место отдано табло с кнопками счёта. -->
+    <com.pedro.library.view.OpenGlView
+        android:id="@+id/openGlView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintWidth_percent="0.4" />
+
+    <!-- Номер партии: пилюля во всю ширину превью, под кадром. -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/titleSet"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Hello World!"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_chip"
+        android:gravity="center"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="?attr/colorOnSurface"
+        app:layout_constraintEnd_toEndOf="@id/openGlView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/openGlView"
+        tools:text="1-я партия" />
+
+    <!--
+        Табло первой команды. Порядок сверху вниз: полоска цвета команды, название,
+        круглая кнопка «+» (выше счёта), счёт, круглая кнопка «−» внизу.
+        Счёт занимает всё оставшееся место (weight) и подбирает кегль сам, поэтому
+        кнопки никогда не вылезают за карточку.
+    -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardFirstTeam"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="0dp"
+        app:layout_constraintBottom_toTopOf="@id/bottomLayout"
+        app:layout_constraintEnd_toStartOf="@id/cardSecondTeam"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toEndOf="@id/openGlView"
+        app:layout_constraintTop_toTopOf="parent"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="8dp">
+
+            <View
+                android:id="@+id/team1Accent"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:background="?attr/colorSurfaceContainerHighest" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/nameFirstTeam"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="СПб" />
+
+            <LinearLayout
+                android:id="@+id/card1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/firstPlusButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/desc_plus_first_team"
+                    app:backgroundTint="?attr/colorPrimary"
+                    app:fabCustomSize="56dp"
+                    app:fabSize="normal"
+                    app:maxImageSize="28dp"
+                    app:srcCompat="@drawable/ic_plus"
+                    app:tint="?attr/colorOnPrimary" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/scoreCardFirst"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:autoSizeMaxTextSize="44sp"
+                android:autoSizeMinTextSize="18sp"
+                android:autoSizeStepGranularity="2sp"
+                android:autoSizeTextType="uniform"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="44sp"
+                tools:text="25" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/firstMinusButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/desc_minus_first_team"
+                app:backgroundTint="?attr/colorSecondaryContainer"
+                app:fabCustomSize="56dp"
+                app:fabSize="normal"
+                app:maxImageSize="28dp"
+                app:srcCompat="@drawable/ic_minus"
+                app:tint="?attr/colorOnSecondaryContainer" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Табло второй команды. -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardSecondTeam"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="12dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="0dp"
+        app:layout_constraintBottom_toTopOf="@id/bottomLayout"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toEndOf="@id/cardFirstTeam"
+        app:layout_constraintTop_toTopOf="parent"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="8dp">
+
+            <View
+                android:id="@+id/team2Accent"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:background="?attr/colorSurfaceContainerHighest" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/nameSecondTeam"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="Калининградская" />
+
+            <LinearLayout
+                android:id="@+id/card2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/secondPlusButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/desc_plus_second_team"
+                    app:backgroundTint="?attr/colorPrimary"
+                    app:fabCustomSize="56dp"
+                    app:fabSize="normal"
+                    app:maxImageSize="28dp"
+                    app:srcCompat="@drawable/ic_plus"
+                    app:tint="?attr/colorOnPrimary" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/scoreCardSecond"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:autoSizeMaxTextSize="44sp"
+                android:autoSizeMinTextSize="18sp"
+                android:autoSizeStepGranularity="2sp"
+                android:autoSizeTextType="uniform"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="44sp"
+                tools:text="21" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/secondMinusButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/desc_minus_second_team"
+                app:backgroundTint="?attr/colorSecondaryContainer"
+                app:fabCustomSize="56dp"
+                app:fabSize="normal"
+                app:maxImageSize="28dp"
+                app:srcCompat="@drawable/ic_minus"
+                app:tint="?attr/colorOnSecondaryContainer" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!--
+        Панель управления: две строки. Верхняя — эфир (плашка, битрейт, кнопка потока),
+        нижняя — запись в память (плашка, время файла, кнопка записи) и служебные кнопки.
+    -->
+    <LinearLayout
+        android:id="@+id/bottomLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurfaceContainerHigh"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="2dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/liveChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_live_chip"
+                android:paddingStart="14dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="6dp"
+                android:text="@string/main_live_label"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="@color/white"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/bitrate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_chip"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="14dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="6dp"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="Целевой: 3.0 · факт: 3.1 Mbps" />
+
+            <!-- Распорка: держит кнопку эфира у правого края, даже когда плашки скрыты. -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/streamBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="168dp"
+                android:backgroundTint="?attr/colorPrimary"
+                android:contentDescription="@string/desc_toggle_stream"
+                app:fabCustomSize="44dp"
+                app:fabSize="normal"
+                app:maxImageSize="22dp"
+                app:srcCompat="@drawable/ic_link"
+                app:tint="?attr/colorOnPrimary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/recordChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_live_chip"
+                android:paddingStart="14dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="6dp"
+                android:text="@string/main_recording_label"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="@color/white"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/recordTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_chip"
+                android:paddingStart="14dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="6dp"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone"
+                tools:text="00:42" />
+
+            <!-- Распорка: кнопки записи и служебные всегда прижаты к правому краю. -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/recordBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/record_button"
+                android:contentDescription="@string/desc_toggle_recording"
+                app:fabCustomSize="44dp"
+                app:fabSize="normal"
+                app:maxImageSize="22dp"
+                app:srcCompat="@drawable/ic_record"
+                app:tint="@color/white" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fullscreenBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="?attr/colorSurfaceContainerHighest"
+                android:contentDescription="@string/desc_toggle_fullscreen"
+                app:fabCustomSize="44dp"
+                app:fabSize="normal"
+                app:maxImageSize="22dp"
+                app:srcCompat="@drawable/ic_fullscreen"
+                app:tint="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/settingsBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="?attr/colorSurfaceContainerHighest"
+                android:contentDescription="@string/desc_open_settings"
+                app:fabCustomSize="44dp"
+                app:fabSize="normal"
+                app:maxImageSize="22dp"
+                app:srcCompat="@drawable/ic_settings"
+                app:tint="?attr/colorOnSurfaceVariant" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Полупрозрачная кнопка сворачивания: видна только в полноэкранном превью. -->
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/collapseBtn"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_margin="16dp"
+        android:background="@drawable/bg_translucent_circle"
+        android:contentDescription="@string/desc_collapse_preview"
+        android:padding="12dp"
+        android:src="@drawable/ic_fullscreen_exit"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/white"
+        tools:visibility="visible" />
+
+    <!-- Полупрозрачные кнопки зума: видны только в полноэкранном превью. -->
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/zoomInBtn"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_translucent_circle"
+        android:contentDescription="@string/desc_zoom_in"
+        android:padding="16dp"
+        android:src="@drawable/ic_plus"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/zoomOutBtn"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:tint="@color/white"
+        tools:visibility="visible" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/zoomOutBtn"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_translucent_circle"
+        android:contentDescription="@string/desc_zoom_out"
+        android:padding="16dp"
+        android:src="@drawable/ic_minus"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:tint="@color/white"
+        tools:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

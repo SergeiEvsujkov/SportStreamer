@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Длина названия команды: используется в android:maxLength и в проверке при сохранении. -->
+    <integer name="team_name_max_length">16</integer>
+</resources>

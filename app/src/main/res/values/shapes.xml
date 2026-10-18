@@ -1,0 +1,10 @@
+<resources>
+    <!--
+        Круглая форма кнопок счёта. У FloatingActionButton в Material 3 форма по умолчанию —
+        скруглённый квадрат, поэтому задаём радиус 50% и получаем ровный круг.
+    -->
+    <style name="ShapeAppearance.SportStreamer.Circle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+</resources>

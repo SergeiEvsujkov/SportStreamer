@@ -1,25 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
+    <!--
+        allowBackup=false: в SharedPreferences лежит ключ трансляции RTMP,
+        его не нужно ни бэкапить в облако, ни переносить на другое устройство.
+
+        SportStreamerApp применяет выбранную тему до создания первого экрана.
+    -->
     <application
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:name=".SportStreamerApp"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SportStreamer">
+
+        <!--
+            Настройки — всегда вертикально: открываются из ландшафтного пульта, а длинный
+            список полей в вертикальной прокрутке читается лучше. На Android 16 (targetSdk 36)
+            система игнорирует ограничение ориентации на экранах от 600 dp, поэтому на планшете
+            экран останется адаптивным.
+
+            configChanges не объявляем: смена темы должна пересоздавать экран. Пересборка
+            содержимого «на месте» (configChanges="uiMode") оставляла переключатели и радиокнопки
+            в цветах прежней темы — Material-компоненты берут палитру при создании активити.
+
+            launchMode="singleTop": второй экземпляр настроек не может лечь поверх первого,
+            даже если какой-то путь попытается открыть их повторно.
+        -->
         <activity
-            android:name=".MainActivity"
-            android:exported="true">
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!--
+            Загрузочный экран: вертикальная ориентация, чтобы splash был «книжным»,
+            затем открывается пульт (он уже ландшафтный).
+        -->
+        <activity
+            android:name=".SplashActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.SportStreamer.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Пульт трансляции.
+
+            configChanges: пульт не пересоздаётся при изменении размера окна,
+            иначе поток и запись обрывались бы при каждом изменении конфигурации.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
     </application>
 
 </manifest>

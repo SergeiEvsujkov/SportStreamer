@@ -1,3 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SportStreamer</string>
+
+    <!-- Экран настроек -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_team1_header">КОМАНДА 1</string>
+    <string name="settings_team2_header">КОМАНДА 2</string>
+    <string name="settings_team_name_hint">Название (до %1$d символов)</string>
+    <string name="settings_choose_color">Выберите цвет:</string>
+    <string name="settings_sets_header">КОЛИЧЕСТВО ПАРТИЙ</string>
+    <string name="settings_sets_best_of_three">3 партии (до 2 побед)</string>
+    <string name="settings_sets_best_of_five">5 партий (до 3 побед)</string>
+    <string name="settings_rtmp_header">📡 RTMP НАСТРОЙКИ</string>
+    <string name="settings_rtmp_url_hint">RTMP URL</string>
+    <string name="settings_rtmp_key_hint">RTMP Key</string>
+    <string name="settings_save_video_label">Сохранять видео в память</string>
+    <string name="settings_camera_header">КАМЕРА</string>
+    <string name="settings_stabilization_label">Стабилизация изображения</string>
+    <string name="settings_stabilization_hint">Сглаживает дрожание камеры. Работает, если устройство поддерживает электронную стабилизацию; на некоторых моделях она отключается при сильном приближении.</string>
+    <string name="stabilization_not_supported">Устройство не поддерживает стабилизацию изображения</string>
+    <string name="settings_auto_exposure_label">Автоэкспозиция и яркость</string>
+    <string name="settings_auto_exposure_hint">Камера сама подстраивает экспозицию под освещение, а ползунок ниже задаёт поправку яркости.</string>
+    <string name="settings_brightness_label">Яркость: %1$d%%</string>
+    <string name="settings_brightness_desc">Поправка яркости</string>
+    <string name="settings_save_button">Сохранить настройки</string>
+    <string name="settings_saved">Настройки сохранены!</string>
+    <string name="settings_error_team_names">Введите названия команд</string>
+    <string name="settings_error_team_name_length">Названия команд не должны превышать %1$d символов</string>
+    <string name="settings_error_rtmp_required">Введите RTMP настройки</string>
+    <string name="settings_error_rtmp_invalid">Адрес должен начинаться с rtmp:// или rtmps://</string>
+
+    <!-- Названия цветов для озвучивания выбора -->
+    <string name="settings_color_red">Красный</string>
+    <string name="settings_color_crimson">Малиновый</string>
+    <string name="settings_color_pink">Розовый</string>
+    <string name="settings_color_orange">Оранжевый</string>
+    <string name="settings_color_amber">Янтарный</string>
+    <string name="settings_color_yellow">Жёлтый</string>
+    <string name="settings_color_lime">Лаймовый</string>
+    <string name="settings_color_green">Зелёный</string>
+    <string name="settings_color_teal">Изумрудный</string>
+    <string name="settings_color_turquoise">Бирюзовый</string>
+    <string name="settings_color_sky">Голубой</string>
+    <string name="settings_color_blue">Синий</string>
+    <string name="settings_color_indigo">Индиго</string>
+    <string name="settings_color_purple">Фиолетовый</string>
+    <string name="settings_color_violet">Тёмно-фиолетовый</string>
+    <string name="settings_color_brown">Коричневый</string>
+    <string name="settings_color_gray">Серый</string>
+    <string name="settings_color_gray_blue">Серо-синий</string>
+    <string name="settings_color_black">Чёрный</string>
+    <string name="settings_color_white">Белый</string>
+
+    <!-- Трансляция и запись -->
+    <string name="settings_broadcast_header">ТРАНСЛЯЦИЯ</string>
+    <string name="settings_broadcast_label">Транслировать в интернет</string>
+    <string name="settings_broadcast_hint">Если выключено, поля RTMP скрыты. В этом режиме работает только сохранение в память — включите его ниже.</string>
+    <string name="settings_split_label">Делить запись на части</string>
+    <string name="settings_split_none">Не делить</string>
+    <string name="settings_split_10">10 минут</string>
+    <string name="settings_split_20">20 минут</string>
+    <string name="settings_split_30">30 минут</string>
+    <string name="settings_record_bitrate_label">Битрейт записи</string>
+    <string name="settings_bitrate_1">1 Мбит/с — экономно</string>
+    <string name="settings_bitrate_3">3 Мбит/с — обычный</string>
+    <string name="settings_bitrate_5">5 Мбит/с — лучшее качество</string>
+    <string name="settings_record_bitrate_hint">Во время эфира запись идёт отдельным энкодером в 1080p, а эфир — в 720p, поэтому битрейт записи от сети не зависит. Примерно 7 МБ в минуту на 1 Мбит/с: 1 — 7 МБ, 3 — 22 МБ, 5 — 37 МБ.</string>
+    <string name="desc_toggle_recording">Начать или остановить запись</string>
+    <string name="main_nothing_selected">В настройках не выбрано ни трансляция, ни сохранение в память</string>
+    <string name="main_stream_lost_keep_recording">Связь с сервером потеряна — запись продолжается</string>
+    <string name="main_stream_lost">Связь с сервером потеряна</string>
+    <string name="settings_theme_header">ТЕМА ОФОРМЛЕНИЯ</string>
+    <string name="settings_theme_system">Как в системе</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_default_team1">Команда 1</string>
+    <string name="settings_default_team2">Команда 2</string>
+
+    <!-- Экран трансляции -->
+    <string name="main_set_label">%1$d-я партия</string>
+    <string name="main_match_finished">Игра закончена</string>
+    <string name="main_live_label">● В эфире</string>
+    <string name="main_recording_label">● Запись</string>
+    <string name="main_match_over_toast">Игра закончена</string>
+    <string name="main_set_finished_title">Партия завершена</string>
+    <string name="main_set_finished_message">Счёт в партии: %1$d : %2$d.\nНачать новую партию?</string>
+    <string name="main_set_finished_positive">Новая партия</string>
+    <string name="main_set_finished_negative">Продолжить эту</string>
+    <string name="main_match_finished_title">Матч завершён</string>
+    <string name="main_match_finished_message">Победитель: %1$s\nСчёт по партиям: %2$d : %3$d</string>
+    <string name="main_match_finished_positive">Новая игра</string>
+    <string name="main_match_finished_negative">Закрыть</string>
+    <string name="main_bitrate_stats">Целевой: %1$.2f · факт: %2$.2f Mbps</string>
+    <string name="main_recording_disabled">Сохранение в память выключено — включите его в настройках</string>
+    <string name="main_bitrate_disabled">Трансляция выключена</string>
+    <string name="main_bitrate_auth_error">Ошибка аутентификации</string>
+    <string name="main_stream_started">Запуск трансляции</string>
+    <string name="main_stream_stopping">Остановка трансляции</string>
+    <string name="main_stream_stopped">Трансляция завершена!</string>
+    <string name="main_stream_url_missing">Сначала заполните настройки RTMP</string>
+    <string name="main_stream_prepare_failed">Не удалось подготовить трансляцию</string>
+    <string name="main_stream_connection_failed">Ошибка подключения: %1$s</string>
+    <string name="main_stream_retry_exhausted">Не удалось переподключиться — трансляция остановлена</string>
+    <string name="main_stream_retry_exhausted_recording">Эфир не восстановлен — запись в память продолжается</string>
+    <string name="main_stream_disconnected">Отключено от RTMP сервера</string>
+    <string name="main_stream_auth_error">Ошибка аутентификации</string>
+    <string name="main_stream_auth_ok">Аутентификация успешна</string>
+    <string name="main_recording_started">Начало записи</string>
+    <string name="main_recording_stopping">Остановка записи</string>
+    <string name="main_recording_saved">Запись сохранена в галерею</string>
+    <string name="main_recording_failed">Не удалось начать запись</string>
+
+    <!-- Разрешения -->
+    <string name="main_permissions_granted">Все разрешения получены</string>
+    <string name="permissions_camera_audio_required">Для трансляции нужны разрешения камеры и микрофона</string>
+
+    <!-- Озвучивание элементов интерфейса -->
+    <string name="desc_plus_first_team">Очко первой команде</string>
+    <string name="desc_minus_first_team">Убрать очко у первой команды</string>
+    <string name="desc_plus_second_team">Очко второй команде</string>
+    <string name="desc_minus_second_team">Убрать очко у второй команды</string>
+    <string name="desc_toggle_stream">Начать или остановить трансляцию</string>
+    <string name="desc_toggle_fullscreen">Развернуть превью на весь экран</string>
+    <string name="desc_collapse_preview">Свернуть превью</string>
+    <string name="desc_zoom_in">Приблизить</string>
+    <string name="desc_zoom_out">Отдалить</string>
+    <string name="desc_open_settings">Открыть настройки</string>
+    <string name="desc_settings_back">Назад</string>
 </resources>
+
