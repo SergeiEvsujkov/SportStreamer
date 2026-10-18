@@ -289,7 +289,9 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
+        <!-- Строка статуса эфира: скрывается целиком, если трансляция выключена в настройках. -->
         <LinearLayout
+            android:id="@+id/broadcastRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
@@ -299,11 +301,12 @@
                 android:id="@+id/liveChip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
                 android:background="@drawable/bg_live_chip"
-                android:paddingStart="14dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="6dp"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="4dp"
                 android:text="@string/main_live_label"
                 android:textAppearance="?attr/textAppearanceLabelLarge"
                 android:textColor="@color/white"
@@ -314,40 +317,21 @@
                 android:id="@+id/bitrate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
                 android:background="@drawable/bg_chip"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:paddingStart="14dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="6dp"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="4dp"
                 android:textAppearance="?attr/textAppearanceLabelLarge"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 tools:text="Целевой: 3.0 · факт: 3.1 Mbps" />
-
-            <!-- Распорка: держит кнопку эфира у правого края, даже когда плашки скрыты. -->
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/streamBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="168dp"
-                android:backgroundTint="?attr/colorPrimary"
-                android:contentDescription="@string/desc_toggle_stream"
-                app:fabCustomSize="44dp"
-                app:fabSize="normal"
-                app:maxImageSize="22dp"
-                app:srcCompat="@drawable/ic_link"
-                app:tint="?attr/colorOnPrimary" />
         </LinearLayout>
 
+        <!-- Строка записи и кнопок: плашки записи слева, кнопки справа. Кнопки видны всегда. -->
         <LinearLayout
+            android:id="@+id/recordRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
@@ -357,11 +341,12 @@
                 android:id="@+id/recordChip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
                 android:background="@drawable/bg_live_chip"
-                android:paddingStart="14dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="6dp"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="4dp"
                 android:text="@string/main_recording_label"
                 android:textAppearance="?attr/textAppearanceLabelLarge"
                 android:textColor="@color/white"
@@ -372,22 +357,49 @@
                 android:id="@+id/recordTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
+                android:layout_marginEnd="8dp"
                 android:background="@drawable/bg_chip"
-                android:paddingStart="14dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="6dp"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="4dp"
                 android:textAppearance="?attr/textAppearanceLabelLarge"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:visibility="gone"
                 tools:text="00:42" />
 
-            <!-- Распорка: кнопки записи и служебные всегда прижаты к правому краю. -->
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/recordStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_chip"
+                android:paddingStart="12dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="4dp"
+                android:text="@string/main_not_recording"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="Запись не идёт" />
+
+            <!-- Распорка: кнопки всегда прижаты к правому краю. -->
             <View
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/streamBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="?attr/colorPrimary"
+                android:contentDescription="@string/desc_toggle_stream"
+                app:fabCustomSize="40dp"
+                app:fabSize="normal"
+                app:maxImageSize="20dp"
+                app:srcCompat="@drawable/ic_link"
+                app:tint="?attr/colorOnPrimary" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/recordBtn"
@@ -396,9 +408,9 @@
                 android:layout_marginStart="8dp"
                 android:backgroundTint="@color/record_button"
                 android:contentDescription="@string/desc_toggle_recording"
-                app:fabCustomSize="44dp"
+                app:fabCustomSize="40dp"
                 app:fabSize="normal"
-                app:maxImageSize="22dp"
+                app:maxImageSize="20dp"
                 app:srcCompat="@drawable/ic_record"
                 app:tint="@color/white" />
 
@@ -409,9 +421,9 @@
                 android:layout_marginStart="8dp"
                 android:backgroundTint="?attr/colorSurfaceContainerHighest"
                 android:contentDescription="@string/desc_toggle_fullscreen"
-                app:fabCustomSize="44dp"
+                app:fabCustomSize="40dp"
                 app:fabSize="normal"
-                app:maxImageSize="22dp"
+                app:maxImageSize="20dp"
                 app:srcCompat="@drawable/ic_fullscreen"
                 app:tint="?attr/colorOnSurfaceVariant" />
 
@@ -422,9 +434,9 @@
                 android:layout_marginStart="8dp"
                 android:backgroundTint="?attr/colorSurfaceContainerHighest"
                 android:contentDescription="@string/desc_open_settings"
-                app:fabCustomSize="44dp"
+                app:fabCustomSize="40dp"
                 app:fabSize="normal"
-                app:maxImageSize="22dp"
+                app:maxImageSize="20dp"
                 app:srcCompat="@drawable/ic_settings"
                 app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>

@@ -74,6 +74,16 @@ class ScoreOverlay(
     /** Добавлены ли фильтры в GL-интерфейс: это делается один раз за активити. */
     private var attached = false
 
+    /**
+     * Наложен ли фон плашки. Сбрасывается в [invalidate], как кэши цветов у полос.
+     *
+     * Сам битмап НЕ кэшируем: `TextureLoader.load(Bitmap[])` после загрузки текстуры вызывает
+     * `bitmap.recycle()` (проверено по байткоду 2.6.7), поэтому сохранённый битмап ко второму
+     * наложению уже переработан и даёт чёрный фон. Декодируем его заново — так же, как полосы
+     * создаются заново в `applyStripImage(...)`.
+     */
+    private var logoApplied = false
+
     /** Какие цвета уже наложены на полосы, чтобы не перекрашивать их на каждый attach. */
     private var team1ColorApplied: Int? = null
     private var team2ColorApplied: Int? = null
@@ -85,9 +95,37 @@ class ScoreOverlay(
      */
     private var appliedState: State? = null
 
-    init {
-        BitmapFactory.decodeResource(resources, R.drawable.score_title)?.let(logoFilter::setImage)
-            ?: Log.w(TAG, "Логотип score_title недоступен — оверлей без логотипа")
+    /** Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает. */
+    private fun applyLogoImage() {
+        val bitmap = BitmapFactory.decodeResource(resources, R.drawable.score_title)
+        if (bitmap == null) {
+            Log.w(TAG, "Логотип score_title недоступен — оверлей без логотипа")
+            return
+        }
+        logoFilter.setImage(bitmap)
+    }
+
+    /**
+     * Помечает подключение потерянным: библиотека снимает фильтры, когда останавливает GL
+     * (`MainRender.release()` делает `f.release()` и `filterRenders.clear()`).
+     *
+     * Вызывается при пересоздании поверхности (`surfaceCreated`) — в том числе при возврате
+     * с экрана настроек. При старте и остановке записи/эфира surfaceCreated не приходит,
+     * поэтому на них это не влияет.
+     *
+     * Сбрасывает кэши так же, как для надписей: `attached` — чтобы фильтры добавились заново,
+     * `appliedState` — чтобы заново ушёл текст, цвета полос — чтобы они взялись из настроек.
+     *
+     * Сами объекты фильтров не пересоздаются: `MainRender.addFilter()` при добавлении заново
+     * вызывает `filter.initGl(...)`, то есть те же экземпляры корректно инициализируются
+     * в новом GL-контексте.
+     */
+    fun invalidate() {
+        attached = false
+        appliedState = null
+        team1ColorApplied = null
+        team2ColorApplied = null
+        logoApplied = false
     }
 
     /**
@@ -98,26 +136,32 @@ class ScoreOverlay(
      * в настройках названия команд и цвета, а после пересборки GL надписи перерисовываются.
      */
     fun attach(state: State, team1Color: Int, team2Color: Int) {
-        if (!attached) {
+        val reattached = !attached
+        if (reattached) {
             // Порядок как в макете: логотип, полосы, затем надписи поверх них.
             imageFilters.forEach { camera.glInterface.addFilter(it) }
             textFilters.forEach { camera.glInterface.addFilter(it) }
             attached = true
         }
 
-        if (team1ColorApplied != team1Color) {
+        // Так же, как текст: при повторном подключении отдаём картинки заново, а цвета полос
+        // берём из настроек (после invalidate() кэш цветов сброшен).
+        if (reattached || team1ColorApplied != team1Color) {
             applyStripImage(stripTeam1Filter, R.drawable.color_team1, team1Color)
             team1ColorApplied = team1Color
         }
-        if (team2ColorApplied != team2Color) {
+        if (reattached || team2ColorApplied != team2Color) {
             applyStripImage(stripTeam2Filter, R.drawable.color_team2, team2Color)
             team2ColorApplied = team2Color
         }
+        if (reattached || !logoApplied) {
+            applyLogoImage()
+            logoApplied = true
+        }
 
         applyGeometry()
-        // attach() вызывается и после пересборки GL (старт/остановка записи и эфира): в новом
-        // контексте текстуры надписей отсутствуют, поэтому сбрасываем кэш и отдаём все надписи
-        // заново через setText. При обычной смене счёта кэш работает и трогается один фильтр.
+        // В новом GL-контексте текстуры надписей тоже пустые: сбрасываем кэш и отдаём все
+        // шесть надписей заново через setText. При обычной смене счёта трогается один фильтр.
         appliedState = null
         updateTexts(state)
     }

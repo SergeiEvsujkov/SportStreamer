@@ -338,9 +338,64 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         binding.zoomInBtn.setOnTouchListener { _, event -> handleZoomTouch(event, 1) }
         binding.zoomOutBtn.setOnTouchListener { _, event -> handleZoomTouch(event, -1) }
-        binding.settingsBtn.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
+        binding.settingsBtn.setOnClickListener { confirmOpenSettings() }
+    }
+
+    /**
+     * Переход в настройки с подтверждением.
+     *
+     * Если идёт запись и/или трансляция — сначала спрашиваем. По подтверждению останавливаем их
+     * ровно теми же обработчиками, что кнопки (`toggleRecording()` / `toggleBroadcast()`), ждём
+     * фактического завершения (файл закрыт и опубликован, эфир прекращён) и только затем открываем
+     * экран настроек. Иначе `onPause()` оборвал бы запись «на полуслове».
+     */
+    private fun confirmOpenSettings() {
+        val recording = isRecordingNow
+        val streaming = rtmpCamera2?.isStreaming == true
+        if (!recording && !streaming) {
+            openSettingsScreen()
+            return
         }
+
+        val titleRes = when {
+            recording && streaming -> R.string.main_leave_settings_title_both
+            recording -> R.string.main_leave_settings_title_recording
+            else -> R.string.main_leave_settings_title_stream
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(titleRes)
+            .setMessage(getString(R.string.main_leave_settings_message))
+            .setPositiveButton(R.string.main_leave_settings_positive) { _, _ -> stopThenOpenSettings() }
+            .setNegativeButton(R.string.main_leave_settings_negative, null)
+            .show()
+    }
+
+    /** Останавливает запись и эфир как кнопками и ждёт, пока всё действительно завершится. */
+    private fun stopThenOpenSettings() {
+        if (isRecordingNow) toggleRecording()
+        if (rtmpCamera2?.isStreaming == true) toggleBroadcast()
+        awaitStopsThenOpenSettings(attempt = 0)
+    }
+
+    /**
+     * Ждёт завершения остановки: файл записи закрыт и опубликован (`isRecordingNow == false`),
+     * трансляция прекращена (`camera.isStreaming == false`). Проверка каждые
+     * [SETTINGS_WAIT_STEP_MS], предохранитель — [SETTINGS_WAIT_ATTEMPTS].
+     */
+    private fun awaitStopsThenOpenSettings(attempt: Int) {
+        val stillRecording = isRecordingNow
+        val stillStreaming = rtmpCamera2?.isStreaming == true
+        if ((!stillRecording && !stillStreaming) || attempt >= SETTINGS_WAIT_ATTEMPTS) {
+            openSettingsScreen()
+            return
+        }
+        handler.postDelayed({
+            if (!isFinishing && !isDestroyed) awaitStopsThenOpenSettings(attempt + 1)
+        }, SETTINGS_WAIT_STEP_MS)
+    }
+
+    private fun openSettingsScreen() {
+        startActivity(Intent(this, SettingsActivity::class.java))
     }
 
     private fun onPoint(team: ScoreEngine.Team, add: Boolean) {
@@ -449,9 +504,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val recording = isRecordingNow
         binding.liveChip.visibility = if (streaming) View.VISIBLE else View.GONE
 
-        // Нижняя строка — запись в память: плашка и время файла видны только во время записи.
-        binding.recordChip.visibility = if (recording) View.VISIBLE else View.GONE
-        binding.recordTime.visibility = if (recording) View.VISIBLE else View.GONE
+        // Нижняя строка — запись в память: во время записи плашка и время файла,
+        // без записи — такая же плашка, как «Трансляция выключена», только про запись.
+        // Если запись выключена в настройках, все три плашки скрыты, а кнопки остаются.
+        val recordingEnabled = settings.saveVideoLocally
+        binding.recordChip.visibility =
+            if (recording && recordingEnabled) View.VISIBLE else View.GONE
+        binding.recordTime.visibility =
+            if (recording && recordingEnabled) View.VISIBLE else View.GONE
+        binding.recordStatus.visibility =
+            if (!recording && recordingEnabled) View.VISIBLE else View.GONE
         if (!recording) binding.recordTime.text = RECORD_TIME_ZERO
         else updateRecordTime()
 
@@ -462,8 +524,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         binding.streamBtn.isEnabled = hasCameraAndAudioPermissions()
         binding.recordBtn.isEnabled = hasCameraAndAudioPermissions()
 
-        // Без трансляции битрейт показывать нечего: в этом режиме работает только запись.
-        binding.bitrate.visibility = if (settings.broadcastEnabled) View.VISIBLE else View.GONE
+        // Строка эфира скрывается целиком, если трансляция выключена в настройках.
+        // Строку записи не скрываем: в ней же кнопки — при выключенной записи скрыты только плашки.
+        // Кнопки выключенных режимов гасим, но оставляем кликабельными, чтобы объяснить причину.
+        val broadcastEnabled = settings.broadcastEnabled
+        binding.broadcastRow.visibility = if (broadcastEnabled) View.VISIBLE else View.GONE
+        binding.streamBtn.alpha = if (broadcastEnabled) 1f else DISABLED_ALPHA
+        binding.recordBtn.alpha = if (recordingEnabled) 1f else DISABLED_ALPHA
 
         // Пилюля битрейта не должна оставаться пустой: заполняем её, только если там ещё ничего нет,
         // чтобы не затирать сообщение об ошибке авторизации.
@@ -519,6 +586,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         surfaceHolderCallback = object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
+                // Поверхность создаётся заново — при первом запуске и при возврате с экрана
+                // настроек. При потере поверхности библиотека снимает фильтры оверлея
+                // (stopPreview() → stopCamera() → MainRender.release()), поэтому помечаем
+                // подключение потерянным: ensurePreview() ниже добавит фильтры заново.
+                // При старте/остановке записи и эфира surfaceCreated не приходит, так что
+                // на них это никак не влияет.
+                overlay?.invalidate()
                 ensurePreview(camera)
             }
 
@@ -947,8 +1021,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             return
         }
         if (!settings.broadcastEnabled) {
-            toast(getString(R.string.main_nothing_selected))
-            startActivity(Intent(this, SettingsActivity::class.java))
+            toast(getString(R.string.main_broadcast_disabled))
             return
         }
         startBroadcast()
@@ -963,7 +1036,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         if (!settings.saveVideoLocally) {
             toast(getString(R.string.main_recording_disabled))
-            startActivity(Intent(this, SettingsActivity::class.java))
             return
         }
         startRecording()
@@ -1490,6 +1562,15 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 5000L
+
+        /** Шаг проверки завершения остановки записи и эфира перед переходом в настройки. */
+        const val SETTINGS_WAIT_STEP_MS = 100L
+
+        /** Предохранитель: 30 × 100 мс = 3 с, после чего настройки открываются в любом случае. */
+        const val SETTINGS_WAIT_ATTEMPTS = 30
+
+        /** Прозрачность кнопки, режим которой выключен в настройках (кнопка остаётся кликабельной). */
+        const val DISABLED_ALPHA = 0.4f
 
         /** Пауза перед повторным подключением оверлея после старта записи/эфира. */
         const val OVERLAY_REATTACH_DELAY_MS = 500L

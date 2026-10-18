@@ -110,6 +110,15 @@
     <string name="main_recording_stopping">Остановка записи</string>
     <string name="main_recording_saved">Запись сохранена в галерею</string>
     <string name="main_recording_failed">Не удалось начать запись</string>
+    <string name="main_not_recording">Запись не идёт</string>
+    <string name="main_broadcast_disabled">Трансляция выключена в настройках — включите её, чтобы вести эфир</string>
+
+    <string name="main_leave_settings_title_recording">Идёт запись</string>
+    <string name="main_leave_settings_title_stream">Идёт трансляция</string>
+    <string name="main_leave_settings_title_both">Идут запись и трансляция</string>
+    <string name="main_leave_settings_message">Перед переходом в настройки запись будет остановлена и сохранена в память, трансляция — прекращена.</string>
+    <string name="main_leave_settings_positive">Остановить и перейти</string>
+    <string name="main_leave_settings_negative">Остаться</string>
 
     <!-- Разрешения -->
     <string name="main_permissions_granted">Все разрешения получены</string>
