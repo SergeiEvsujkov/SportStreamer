@@ -596,6 +596,25 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Закрывает панель и применяет изменившиеся настройки к пульту. */
+    /** Локальная точка доступа: поднимается по кнопке, чтобы второму телефону было к чему подключаться. */
+    private var remoteHotspot: RemoteHotspot? = null
+    private var hotspotSsid: String = ""
+    private var hotspotPassword: String = ""
+    private var remoteQrView: android.widget.ImageView? = null
+    private var remotePin: String = ""
+
+    /** Запрос разрешений, без которых система не даёт поднять точку доступа. */
+    private val hotspotPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.all { it }
+        if (granted) {
+            remoteHotspot?.start()
+        } else {
+            toast(getString(R.string.remote_hotspot_permission))
+        }
+    }
+
     /** Сервер удалённого пульта: работает, пока открыт диалог сопряжения. */
     private var remoteServer: RemoteScoreServer? = null
 
@@ -607,6 +626,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private fun showRemoteDialog() {
         if (remoteServer != null) return
         val pin = RemoteScoreProtocol.generatePin()
+        remotePin = pin
         val address = localIpAddress()
         val server = RemoteScoreServer(pin, object : RemoteScoreServer.Listener {
             override fun onPoint(team: Int, add: Boolean) {
@@ -643,8 +663,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         if (address != null) {
             val payload = "sportstreamer://remote?address=$address:${RemoteScoreProtocol.PORT}&pin=$pin"
             generateQrCode(payload)?.let { bitmap ->
+                val qrView = android.widget.ImageView(this).apply { setImageBitmap(bitmap) }
+                remoteQrView = qrView
                 container.addView(
-                    android.widget.ImageView(this).apply { setImageBitmap(bitmap) },
+                    qrView,
                     android.widget.LinearLayout.LayoutParams(
                         android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
@@ -658,6 +680,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             setPadding(0, pad, 0, 0)
         })
 
+        // Кнопка поднимает локальную точку доступа: второй телефон подключается к ней
+        // и сканирует обновлённый QR — пароль вводить не нужно.
+        container.addView(com.google.android.material.button.MaterialButton(this).apply {
+            text = getString(R.string.remote_hotspot_start)
+            setOnClickListener { startHotspot(address) }
+        }, android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (12 * resources.displayMetrics.density).toInt() })
+
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.remote_dialog_title)
             .setView(container)
@@ -668,9 +700,69 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             .setOnDismissListener {
                 remoteServer?.stop()
                 remoteServer = null
+                remoteHotspot?.stop()
+                remoteHotspot = null
+                remoteQrView = null
+                hotspotSsid = ""
+                hotspotPassword = ""
             }
             .show()
     }
+
+    /** Поднимает локальную точку доступа и обновляет QR так, чтобы в нём были SSID и пароль. */
+    private fun startHotspot(address: String?) {
+        if (remoteHotspot == null) {
+            remoteHotspot = RemoteHotspot(this, object : RemoteHotspot.Listener {
+                override fun onReady(ssid: String, password: String) {
+                    hotspotSsid = ssid
+                    hotspotPassword = password
+                    toast(getString(R.string.remote_hotspot_ready, ssid))
+                    updateQrCode(address)
+                }
+
+                override fun onFailed(reason: String) {
+                    toast(reason)
+                }
+            })
+        }
+        val permissions = buildList {
+            add(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                add(android.Manifest.permission.NEARBY_WIFI_DEVICES)
+            }
+        }
+        val missing = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            remoteHotspot?.start()
+        } else {
+            hotspotPermissionLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    /** Перерисовывает QR: после включения точки доступа в нём появляются SSID и пароль. */
+    private fun updateQrCode(address: String?) {
+        val view = remoteQrView ?: return
+        val host = address ?: return
+        val payload = buildRemoteQrPayload(host)
+        generateQrCode(payload)?.let { view.setImageBitmap(it) }
+    }
+
+    /** Содержимое QR: адрес, код и, если точка поднята, данные сети. */
+    private fun buildRemoteQrPayload(address: String): String {
+        val base = "sportstreamer://remote?address=$address:${RemoteScoreProtocol.PORT}" +
+            "&pin=${currentRemotePin()}"
+        return if (hotspotSsid.isNotEmpty()) {
+            "$base&ssid=${android.net.Uri.encode(hotspotSsid)}" +
+                "&pass=${android.net.Uri.encode(hotspotPassword)}"
+        } else {
+            base
+        }
+    }
+
+    /** Код сопряжения текущей сессии пульта (тот, что показан в диалоге). */
+    private fun currentRemotePin(): String = remotePin
 
     /** Рисует QR-код с данными сопряжения. */
     private fun generateQrCode(payload: String): android.graphics.Bitmap? = try {

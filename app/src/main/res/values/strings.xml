@@ -197,6 +197,9 @@
     <string name="remote_client_team1">Команда 1</string>
     <string name="remote_client_team2">Команда 2</string>
     <string name="remote_button_client">Я пульт: подключиться к другому телефону</string>
+    <string name="remote_hotspot_start">Поднять точку доступа</string>
+    <string name="remote_hotspot_ready">Точка доступа включена: %1$s</string>
+    <string name="remote_hotspot_permission">Без доступа к геолокации система не даёт включить точку доступа</string>
 
 </resources>
 
