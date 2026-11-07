@@ -1917,8 +1917,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             Log.e(TAG, "Ошибка остановки трансляции", e)
         }
         // Без активной записи stopStream() делает полный teardown: глушит GL и закрывает камеру,
-        // поэтому флаг превью больше не соответствует действительности — поднимаем картинку заново.
-        if (!isRecordingNow) restorePreviewSoon()
+        // поэтому флаг превью больше не соответствует действительности. Поднимаем картинку
+        // детерминированно: серия отложенных попыток оставляла чёрный экран (см. restartPreviewAfterTeardown).
+        if (!isRecordingNow) restartPreviewAfterTeardown()
         updateUi()
     }
 
