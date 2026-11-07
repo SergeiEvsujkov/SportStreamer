@@ -1439,7 +1439,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             toast(getString(R.string.main_stream_prepare_failed))
             return
         }
-        refreshPreviewAfterPrepare(camera)
+        // Превью здесь намеренно НЕ поднимаем: startStream() сам откроет камеру и GL
+        // (startEncoders → prepareGlView → openLastCamera). Если поднять его заранее,
+        // камера готовится дважды подряд, и кадр становится чёрным — проверено на устройстве.
 
         retryCount = 0
         // Новая сессия: с этого момента обрыв связи снова повод поднимать поток заново.
@@ -1460,10 +1462,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             return
         }
 
-        // startStream() пересобирает GL под энкодеры — возвращаем надписи без мигания,
-        // но сначала сбрасываем кэш: старые фильтры остались в прежнем GL-контексте.
+        // startStream() пересобирает GL под энкодеры: превью он поднял сам, синхронизируем флаг
+        // и возвращаем надписи — но сначала сбрасываем кэш, старые фильтры остались в прежнем контексте.
+        previewRunning = camera.isOnPreview
+        if (!previewRunning) ensurePreview(camera)
         overlay?.invalidate()
-        refreshOverlay()
+        attachOverlayWhenGlReady()
 
         // Если запись шла до старта эфира — продолжаем её новой частью (старая закрыта выше).
         if (wasRecording) startLocalRecording()
