@@ -121,8 +121,13 @@ class RemoteControlActivity : AppCompatActivity() {
                 game: Int,
                 setPending: Boolean,
                 matchOver: Boolean,
-                setsToWin: Int
+                setsToWin: Int,
+                team1Name: String,
+                team2Name: String
             ) {
+                // Имена команд приходят с источника: на пульте они должны совпадать с табло.
+                if (team1Name.isNotBlank()) binding.tvTeam1Name.text = team1Name
+                if (team2Name.isNotBlank()) binding.tvTeam2Name.text = team2Name
                 // Всего партий в матче: до 2 побед — 3 партии, до 3 побед — 5.
                 val totalGames = setsToWin * 2 - 1
                 binding.tvStatus.text = getString(

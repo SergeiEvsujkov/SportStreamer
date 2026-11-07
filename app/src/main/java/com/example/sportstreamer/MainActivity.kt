@@ -980,7 +980,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 game = engine.team1Sets + engine.team2Sets + 1,
                 setPending = setFinishedDialog != null,
                 matchOver = engine.isMatchOver,
-                setsToWin = settings.setsToWin
+                setsToWin = settings.setsToWin,
+                team1Name = settings.team1Name,
+                team2Name = settings.team2Name
             )
         )
     }
