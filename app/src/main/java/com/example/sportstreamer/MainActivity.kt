@@ -1905,6 +1905,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Остановка по нашей воле: запоздавший onDisconnect() не должен поднимать поток заново.
         userStoppedStream = true
         streamConnected = false
+        // Снимаем всё, что могло остаться в очереди: иначе отложенный перезапуск
+        // сработает уже после «Стоп» и тихо вернёт эфир.
+        handler.removeCallbacks(hardRestartRunnable)
+        handler.removeCallbacks(bitrateTicker)
+        streamHardRestartCount = 0
+        retryCount = 0
         try {
             camera.stopStream()
         } catch (e: Exception) {
@@ -1954,6 +1960,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private fun restartStreamFromScratch() {
         val camera = rtmpCamera2 ?: return
         if (!settings.broadcastEnabled) return
+        // Пользователь нажал «Стоп» — никакие отложенные перезапуски не нужны.
+        if (userStoppedStream) return
         // Соединение действительно живо (например, библиотека успела переподключиться сама).
         // Проверять camera.isStreaming нельзя: он остаётся true и после неудачного подключения.
         if (streamConnected) return
