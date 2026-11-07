@@ -136,5 +136,8 @@
     <string name="desc_zoom_out">Отдалить</string>
     <string name="desc_open_settings">Открыть настройки</string>
     <string name="desc_settings_back">Назад</string>
+
+    <!-- Смена темы пересоздаёт экран, поэтому во время эфира применяется позже. -->
+    <string name="settings_theme_applied_later">Тема применится после остановки эфира и записи</string>
 </resources>
 

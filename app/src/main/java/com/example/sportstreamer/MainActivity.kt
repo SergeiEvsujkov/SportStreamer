@@ -13,18 +13,23 @@ import android.util.Range
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import com.example.sportstreamer.databinding.ActivityMainBinding
+import com.example.sportstreamer.databinding.ActivitySettingsBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
@@ -70,7 +75,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Работает ли превью: `stopStream()` закрывает камеру, и её нужно открыть заново. */
     private var previewRunning = false
 
-    /** Экран настроек уже показан при первом запуске — второй раз не открываем. */
+    /**
+     * Открытая панель настроек. Пока она на экране, пульт не останавливается, поверхность
+     * превью не уничтожается, запись и эфир продолжаются.
+     */
+    private var settingsPanel: SettingsPanel? = null
+
+    /** Настройки уже показаны при первом запуске — второй раз не открываем. */
     private var awaitingSettings = false
 
     /** Превью развёрнуто на весь экран. */
@@ -183,12 +194,21 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (settingsPanel != null) {
+                    hideSettingsPanel()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
+
         settings = SettingsRepository.load(this)
         engine = ScoreEngine(settings.setsToWin)
         savedInstanceState?.let(::restoreMatchState)
-        // Экран настроек мог быть уже открыт до пересоздания (например, при смене темы).
-        // Без восстановления флага пульт открывал бы второй экран настроек поверх первого.
-        awaitingSettings = savedInstanceState?.getBoolean(STATE_AWAITING_SETTINGS) ?: false
         bitrateAdapter = BitrateAdapter()
 
         val camera = RtmpCamera2(binding.openGlView, this)
@@ -224,7 +244,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         if (!settings.isConfigured) {
             if (!awaitingSettings) {
                 awaitingSettings = true
-                startActivity(Intent(this, SettingsActivity::class.java))
+                showSettingsPanel()
             }
             return
         }
@@ -338,7 +358,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         binding.zoomInBtn.setOnTouchListener { _, event -> handleZoomTouch(event, 1) }
         binding.zoomOutBtn.setOnTouchListener { _, event -> handleZoomTouch(event, -1) }
-        binding.settingsBtn.setOnClickListener { confirmOpenSettings() }
+        binding.settingsBtn.setOnClickListener { showSettingsPanel() }
     }
 
     /**
@@ -395,7 +415,95 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     private fun openSettingsScreen() {
-        startActivity(Intent(this, SettingsActivity::class.java))
+        showSettingsPanel()
+    }
+
+    /**
+     * Показывает настройки панелью поверх пульта.
+     *
+     * Отдельная активити для этого не годится: её запуск переводит пульт в `onPause`
+     * (там всё останавливается) и уничтожает поверхность `OpenGlView`, из-за чего
+     * камера и GL гасятся, а запись обрывается. Панель живёт в том же окне — ни одного
+     * колбэка жизненного цикла не приходит, кадры продолжают идти в энкодер.
+     */
+    private fun showSettingsPanel() {
+        if (settingsPanel != null) return
+
+        val panelBinding = ActivitySettingsBinding.inflate(layoutInflater, binding.settingsHost, false)
+        binding.settingsHost.removeAllViews()
+        binding.settingsHost.addView(
+            panelBinding.root,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        // Панель занимает весь экран, поэтому отступы системных панелей добавляем сами.
+        ViewCompat.setOnApplyWindowInsetsListener(panelBinding.root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.updatePadding(
+                left = bars.left,
+                top = bars.top,
+                right = bars.right,
+                bottom = bars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(panelBinding.root)
+
+        val panel = SettingsPanel(
+            activity = this,
+            binding = panelBinding,
+            onClose = { hideSettingsPanel() },
+            onThemeSelected = { mode -> applyThemeFromPanel(mode) }
+        )
+        settingsPanel = panel
+        panel.attach()
+        binding.settingsHost.isVisible = true
+        Log.i(TAG, "Настройки открыты панелью поверх пульта; запись и эфир не прерываются")
+    }
+
+    /** Закрывает панель и применяет изменившиеся настройки к пульту. */
+    private fun hideSettingsPanel() {
+        val panel = settingsPanel ?: return
+        panel.commit()
+        settingsPanel = null
+        binding.settingsHost.removeAllViews()
+        binding.settingsHost.isVisible = false
+
+        settings = SettingsRepository.load(this)
+        if (settings.setsToWin != engine.setsToWin) {
+            // Формат матча изменили в настройках — начинаем матч заново.
+            engine = ScoreEngine(settings.setsToWin)
+        }
+        val camera = rtmpCamera2
+        if (camera != null && !previewRunning) {
+            ensurePreview(camera)
+        }
+        if (previewRunning) {
+            attachOverlay()
+            applyVideoStabilization()
+            applyExposure()
+        }
+        // Первый запуск: настройки заполнили только что — разрешения и превью ещё не запрошены.
+        ensurePermissions()
+        updateUi()
+    }
+
+    /**
+     * Смена темы из панели.
+     *
+     * `setDefaultNightMode` пересоздаёт активити, а вместе с ней уничтожается поверхность
+     * превью и обрывается запись. Пока идёт эфир или запись, выбор сохраняется и применится
+     * после остановки — об этом честно сообщаем.
+     */
+    private fun applyThemeFromPanel(mode: Int) {
+        val live = isRecordingNow || rtmpCamera2?.isStreaming == true
+        if (live) {
+            toast(getString(R.string.settings_theme_applied_later))
+            return
+        }
+        AppCompatDelegate.setDefaultNightMode(ThemeMode.nightMode(mode))
     }
 
     private fun onPoint(team: ScoreEngine.Team, add: Boolean) {
@@ -1092,7 +1200,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val url = settings.fullRtmpUrl
         if (url.isBlank()) {
             toast(getString(R.string.main_stream_url_missing))
-            startActivity(Intent(this, SettingsActivity::class.java))
+            showSettingsPanel()
             return
         }
 

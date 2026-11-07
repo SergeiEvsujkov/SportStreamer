@@ -491,4 +491,22 @@
         app:tint="@color/white"
         tools:visibility="visible" />
 
+    <!--
+        Настройки показываются панелью поверх пульта, а не отдельным экраном: активити
+        остаётся на экране, её поверхность не уничтожается, запись и эфир продолжаются.
+    -->
+    <FrameLayout
+        android:id="@+id/settingsHost"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="?attr/colorSurface"
+        android:clickable="true"
+        android:elevation="12dp"
+        android:focusable="true"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
