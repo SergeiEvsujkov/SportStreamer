@@ -783,11 +783,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 shownAddress == null -> getString(R.string.remote_need_network)
                 apAddress != null -> getString(
                     R.string.remote_hotspot_address,
-                    "$apAddress:${RemoteWebServer.PORT}"
+                    "https://$apAddress:${RemoteWebServer.PORT}"
                 )
                 else -> getString(
                     R.string.remote_wifi_address,
-                    "$shownAddress:${RemoteWebServer.PORT}"
+                    "https://$shownAddress:${RemoteWebServer.PORT}"
                 )
             }
             textSize = 16f
@@ -843,7 +843,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                     remoteNetworkView?.text =
                         getString(R.string.remote_hotspot_details, ssid, password)
                     remoteAddressView?.text =
-                        getString(R.string.remote_address_line, "$hotspotAddress:${RemoteWebServer.PORT}")
+                        getString(R.string.remote_address_line, "https://$hotspotAddress:${RemoteWebServer.PORT}")
                     updateQrCode(hotspotAddress)
                 }
 
