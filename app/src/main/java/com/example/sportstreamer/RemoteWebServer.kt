@@ -19,6 +19,7 @@ import kotlin.concurrent.thread
  * Доступ защищён токеном в URL: без него страница и данные не отдаются.
  */
 class RemoteWebServer(
+    private val context: android.content.Context,
     private val token: String,
     private val stateProvider: () -> String,
     private val pointHandler: (team: Int, add: Boolean) -> Unit,
@@ -38,7 +39,9 @@ class RemoteWebServer(
         running = true
         thread(name = "remote-web-server", isDaemon = true) {
             try {
-                val socket = ServerSocket(PORT)
+                // HTTPS обязателен: только на защищённом соединении браузер разрешает
+                // удерживать экран включённым (Screen Wake Lock API).
+                val socket = createServerSocket()
                 serverSocket = socket
                 Log.i(TAG, "Веб-пульт слушает порт $PORT")
                 while (running) {
@@ -51,6 +54,24 @@ class RemoteWebServer(
                 if (running) Log.e(TAG, "Веб-пульт остановлен с ошибкой", e)
             }
         }
+    }
+
+    /** Серверный сокет: HTTPS с самоподписанным сертификатом, при сбое — обычный HTTP. */
+    private fun createServerSocket(): ServerSocket = try {
+        val keyStore = java.security.KeyStore.getInstance("PKCS12")
+        context.resources.openRawResource(R.raw.remote_p12).use { input ->
+            keyStore.load(input, KEYSTORE_PASSWORD.toCharArray())
+        }
+        val keyManagers = javax.net.ssl.KeyManagerFactory.getInstance(
+            javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm()
+        )
+        keyManagers.init(keyStore, KEYSTORE_PASSWORD.toCharArray())
+        val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+        sslContext.init(keyManagers.keyManagers, null, null)
+        sslContext.serverSocketFactory.createServerSocket(PORT)
+    } catch (e: Exception) {
+        Log.e(TAG, "HTTPS не поднялся, работаю по HTTP", e)
+        ServerSocket(PORT)
     }
 
     private fun handle(client: Socket) {
@@ -163,6 +184,9 @@ class RemoteWebServer(
         private const val TAG = "RemoteWebServer"
         private const val SOCKET_TIMEOUT_MS = 10_000
 
+        /** Пароль встроенного хранилища с сертификатом. */
+        private const val KEYSTORE_PASSWORD = "sportstreamer"
+
         /** Страница пульта: две команды, счёт и кнопки. Всё локально, без внешних скриптов. */
         private val PAGE = """
 <!doctype html>
@@ -176,7 +200,8 @@ class RemoteWebServer(
   body { margin:0; font-family: system-ui, sans-serif; background:#f2f0f7; color:#1c1b1f; }
   header { padding:16px; text-align:center; font-size:20px; color:#6750a4; }
   #score { text-align:center; font-size:22px; padding:8px 0 4px; }
-  #bitrate { text-align:center; font-size:16px; color:#555; padding:0 0 12px; }
+  #bitrate { text-align:center; font-size:16px; color:#555; padding:0 0 4px; }
+  #wake { text-align:center; font-size:14px; color:#777; padding:0 0 12px; }
   .teams { display:flex; gap:12px; padding:0 16px 24px; }
   .team { flex:1; background:#fff; border-radius:20px; padding:16px; text-align:center;
           box-shadow:0 2px 8px rgba(0,0,0,.08); }
@@ -191,6 +216,7 @@ class RemoteWebServer(
 <header>SportStreamer — пульт</header>
 <div id="score">загрузка…</div>
 <div id="bitrate">битрейт: —</div>
+<div id="wake"></div>
 <div class="teams">
   <div class="team">
     <div class="name" id="n1">Команда 1</div>
@@ -266,6 +292,30 @@ async function tick() {
     }
   } catch (e) { el('status').textContent = 'нет связи с источником'; }
 }
+// Экран не должен гаснуть: держим wake lock, пока страница открыта.
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if (!('wakeLock' in navigator)) {
+      el('wake').textContent = 'браузер не умеет удерживать экран';
+      return;
+    }
+    wakeLock = await navigator.wakeLock.request('screen');
+    el('wake').textContent = 'экран не гаснет';
+    wakeLock.addEventListener('release', () => {
+      el('wake').textContent = 'удержание экрана снято';
+      wakeLock = null;
+    });
+  } catch (e) {
+    el('wake').textContent = 'не удалось удержать экран: ' + e.message;
+  }
+}
+document.addEventListener('pointerdown', keepAwake);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !wakeLock) keepAwake();
+});
+keepAwake();
+
 setInterval(tick, 1000);
 tick();
 </script>

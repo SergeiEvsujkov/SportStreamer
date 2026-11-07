@@ -689,6 +689,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         if (remoteWeb == null) {
             remoteWeb = RemoteWebServer(
+                context = this,
                 token = pin,
                 stateProvider = {
                     RemoteScoreProtocol.state(
@@ -729,7 +730,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Адрес страницы для проверки в браузере: пишем в лог, чтобы его можно было
         // открыть снаружи, не сканируя QR.
         if (address != null) {
-            Log.i(TAG, "веб-пульт: http://$address:${RemoteWebServer.PORT}/?t=$pin")
+            Log.i(TAG, "веб-пульт: https://$address:${RemoteWebServer.PORT}/?t=$pin")
         }
 
         val message = if (address == null) {
@@ -877,7 +878,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // После включения точки доступа домашний адрес недоступен второму телефону:
         // в QR должен попасть адрес в сети точки (обычно 192.168.43.1).
         val actual = hotspotAddress ?: address
-        return "http://$actual:${RemoteWebServer.PORT}/?t=${currentRemotePin()}"
+        return "https://$actual:${RemoteWebServer.PORT}/?t=${currentRemotePin()}"
     }
 
     /** Код сопряжения текущей сессии пульта (тот, что показан в диалоге). */
