@@ -738,6 +738,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             getString(R.string.remote_dialog_message, "$address:${RemoteScoreProtocol.PORT}", pin)
         }
 
+        // Что показывать: включённую точку доступа, иначе общий Wi-Fi, иначе подсказку.
+        val apAddress = findHotspotAddress()
+        val wifiAddress = if (apAddress == null) localIpAddress() else null
+        val shownAddress = apAddress ?: wifiAddress
+
         // Пульт ландшафтный, и по высоте диалог ограничен. Поэтому раскладка в две колонки:
         // QR слева, адрес, код и кнопки — справа. Так всё помещается без прокрутки.
         val density = resources.displayMetrics.density
@@ -753,8 +758,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             layoutParams = android.widget.LinearLayout.LayoutParams(qrSize, qrSize)
         }
         remoteQrView = qrView
-        if (address != null) {
-            generateQrCode(buildRemoteQrPayload(address))?.let { qrView.setImageBitmap(it) }
+        if (shownAddress != null) {
+            generateQrCode(buildRemoteQrPayload(shownAddress))?.let { qrView.setImageBitmap(it) }
         }
         container.addView(qrView)
 
@@ -769,10 +774,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
 
         val addressView = android.widget.TextView(this).apply {
-            text = getString(
-                R.string.remote_address_line,
-                address?.let { "$it:${RemoteWebServer.PORT}" } ?: "—"
-            )
+            text = when {
+                shownAddress == null -> getString(R.string.remote_no_network)
+                apAddress != null -> getString(
+                    R.string.remote_hotspot_address,
+                    "$apAddress:${RemoteWebServer.PORT}"
+                )
+                else -> getString(
+                    R.string.remote_wifi_address,
+                    "$shownAddress:${RemoteWebServer.PORT}"
+                )
+            }
             textSize = 16f
         }
         remoteAddressView = addressView
@@ -790,21 +802,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             setPadding(0, 0, 0, (8 * density).toInt())
         }
         remoteNetworkView = networkView
-        if (hotspotSsid.isNotEmpty()) {
-            networkView.text = getString(R.string.remote_hotspot_details, hotspotSsid, hotspotPassword)
+        if (apAddress != null) {
+            // Имя и пароль точки знает только сама система — их можно посмотреть в её настройках.
+            networkView.text = getString(R.string.remote_hotspot_hint)
+        } else if (wifiAddress == null) {
+            networkView.text = getString(R.string.remote_no_network_hint)
         }
         right.addView(networkView)
-        right.addView(com.google.android.material.button.MaterialButton(
-            this,
-            null,
-            com.google.android.material.R.attr.materialButtonOutlinedStyle
-        ).apply {
-            text = getString(R.string.remote_hotspot_start)
-            setOnClickListener { startHotspot(address) }
-        }, android.widget.LinearLayout.LayoutParams(
-            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
 
         container.addView(right)
 
