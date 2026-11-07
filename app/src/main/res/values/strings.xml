@@ -191,6 +191,7 @@
     <string name="remote_client_status_connecting">Подключение…</string>
     <string name="remote_client_status_connected">Пульт подключён</string>
     <string name="remote_client_status_disconnected">Соединение потеряно</string>
+    <string name="remote_client_no_state">Источник не прислал счёт — скорее всего, на нём другая версия приложения</string>
     <string name="remote_client_bad_qr">Это не код SportStreamer</string>
     <string name="remote_client_fill_fields">Введите адрес и четырёхзначный код</string>
     <string name="remote_client_not_connected">Сначала подключитесь к источнику</string>

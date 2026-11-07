@@ -21,6 +21,7 @@ class RemoteControlActivity : AppCompatActivity() {
     /** Открытый диалог завершения партии: закрывается, когда решение принято с любой стороны. */
     private var stateDialog: androidx.appcompat.app.AlertDialog? = null
     private var lastSetPending = false
+    private var stateReceived = false
     private val reconnectHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var reconnectAttempts = 0
     private var userClosed = false
@@ -99,8 +100,15 @@ class RemoteControlActivity : AppCompatActivity() {
         val newClient = RemoteScoreClient(host, port, pin, object : RemoteScoreClient.Listener {
             override fun onConnected() {
                 reconnectAttempts = 0
+                stateReceived = false
                 binding.tvStatus.text = getString(R.string.remote_client_status_connected)
                 updateButtons(enabled = true)
+                // Если источник не пришлёт состояние, значит версии приложений разошлись.
+                reconnectHandler.postDelayed({
+                    if (!stateReceived && client != null) {
+                        binding.tvStatus.text = getString(R.string.remote_client_no_state)
+                    }
+                }, STATE_WAIT_MS)
             }
 
             override fun onDisconnected(reason: String?) {
@@ -125,6 +133,7 @@ class RemoteControlActivity : AppCompatActivity() {
                 team1Name: String,
                 team2Name: String
             ) {
+                stateReceived = true
                 // Имена команд приходят с источника: на пульте они должны совпадать с табло.
                 if (team1Name.isNotBlank()) binding.tvTeam1Name.text = team1Name
                 if (team2Name.isNotBlank()) binding.tvTeam2Name.text = team2Name
@@ -210,6 +219,7 @@ class RemoteControlActivity : AppCompatActivity() {
     private companion object {
         const val RECONNECT_DELAY_MS = 2000L
         const val MAX_RECONNECT_ATTEMPTS = 30
+        const val STATE_WAIT_MS = 2000L
     }
 
     private fun toast(message: String) {
