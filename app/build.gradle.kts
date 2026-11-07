@@ -20,12 +20,13 @@ android {
         versionCode = 3
         versionName = "1.2"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Сжатие и удаление неиспользуемого кода: ощутимо уменьшает APK.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -71,15 +72,10 @@ dependencies {
 
     implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
     // extra-sources добавляет CameraX/UVC-источники.
-    implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
 
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
 
     // QR-сопряжение удалённого пульта: генерация кода и сканирование камерой.
     implementation("com.google.zxing:core:3.5.3")
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     // SDK обновлений RuStore подключается только в варианте rustore.
     "rustoreImplementation"(platform("ru.rustore.sdk:bom:2026.10.01"))

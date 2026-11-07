@@ -377,8 +377,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             remoteServer = null
             remoteWeb?.stop()
             remoteWeb = null
-            remoteHotspot?.stop()
-            remoteHotspot = null
         }
         panelLayoutListener?.let { binding.settingsHost.removeOnLayoutChangeListener(it) }
         panelLayoutListener = null
@@ -610,8 +608,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Закрывает панель и применяет изменившиеся настройки к пульту. */
-    /** Локальная точка доступа: поднимается по кнопке, чтобы второму телефону было к чему подключаться. */
-    private var remoteHotspot: RemoteHotspot? = null
     private var remoteWeb: RemoteWebServer? = null
     /** Адрес телефона в сети точки доступа: по нему второй телефон открывает страницу. */
     private var hotspotAddress: String? = null
@@ -622,17 +618,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private var remoteQrView: android.widget.ImageView? = null
     private var remotePin: String = ""
 
-    /** Запрос разрешений, без которых система не даёт поднять точку доступа. */
-    private val hotspotPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        val granted = result.values.all { it }
-        if (granted) {
-            remoteHotspot?.start()
-        } else {
-            toast(getString(R.string.remote_hotspot_permission))
-        }
-    }
 
     /** Открытый диалог завершения партии: его может закрыть и пульт. */
     private var setFinishedDialog: androidx.appcompat.app.AlertDialog? = null
@@ -830,43 +815,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             .show()
     }
 
-    /** Поднимает локальную точку доступа и обновляет QR так, чтобы в нём были SSID и пароль. */
-    private fun startHotspot(address: String?) {
-        if (remoteHotspot == null) {
-            remoteHotspot = RemoteHotspot(this, object : RemoteHotspot.Listener {
-                override fun onReady(ssid: String, password: String) {
-                    hotspotSsid = ssid
-                    hotspotPassword = password
-                    // Адрес мог измениться: телефон ушёл в сеть точки доступа.
-                    hotspotAddress = findHotspotAddress() ?: address
-                    toast(getString(R.string.remote_hotspot_ready, ssid))
-                    remoteNetworkView?.text =
-                        getString(R.string.remote_hotspot_details, ssid, password)
-                    remoteAddressView?.text =
-                        getString(R.string.remote_address_line, "https://$hotspotAddress:${RemoteWebServer.PORT}")
-                    updateQrCode(hotspotAddress)
-                }
-
-                override fun onFailed(reason: String) {
-                    toast(reason)
-                }
-            })
-        }
-        val permissions = buildList {
-            add(android.Manifest.permission.ACCESS_FINE_LOCATION)
-            if (android.os.Build.VERSION.SDK_INT >= 33) {
-                add(android.Manifest.permission.NEARBY_WIFI_DEVICES)
-            }
-        }
-        val missing = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing.isEmpty()) {
-            remoteHotspot?.start()
-        } else {
-            hotspotPermissionLauncher.launch(missing.toTypedArray())
-        }
-    }
 
     /** Перерисовывает QR: после включения точки доступа в нём появляются SSID и пароль. */
     private fun updateQrCode(address: String?) {
