@@ -88,6 +88,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Контейнер панели настроек: он же приёмник смахивания и объект поворота. */
     private var settingsPanelContainer: SwipeDismissFrameLayout? = null
 
+    /** Номер сессии открытия настроек: отсекает устаревшие запросы ориентации. */
+    private var settingsSession = 0
+
     /** Настройки уже показаны при первом запуске — второй раз не открываем. */
     private var awaitingSettings = false
 
@@ -159,6 +162,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      * а проверки по `isStreaming` блокировали переподключение.
      */
     @Volatile
+    /** Последние записанные в лог отступы безопасной зоны — чтобы не писать их повторно. */
+    private var lastSafeArea: String? = null
+
     /** Последние показания телеметрии: дропы считаем как разницу между опросами. */
     private var lastDroppedFrames = 0L
     private var lastTelemetryLogMs = 0L
@@ -483,6 +489,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        Log.i(
+            TAG,
+            "ориентация: " +
+                if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) "портрет" else "ландшафт" +
+                ", панель " + (if (settingsPanel != null) "открыта" else "закрыта")
+        )
         if (settingsPanel != null) applyPanelLayout()
     }
 
@@ -529,10 +541,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Пока идёт эфир или запись, ориентацию окна не трогаем: смена ориентации
         // уничтожает поверхность превью и обрывает запись. В остальное время переводим
         // окно в портрет, чтобы клавиатура ввода тоже была вертикальной.
-        requestedOrientation = if (live) {
-            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        //
+        // Запрос откладываем на кадр: если панель только что закрывали, возврат в ландшафт
+        // ещё в пути, и два запроса подряд система сводит в один — тогда клавиатура остаётся
+        // горизонтальной. Номер сессии отсекает устаревшие запросы.
+        val session = ++settingsSession
+        binding.settingsHost.post {
+            if (settingsSession != session || settingsPanel == null) return@post
+            requestedOrientation = if (live) {
+                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
         }
         applyPanelLayout()
         binding.settingsHost.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -569,6 +589,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         panel.commit()
         settingsPanel = null
         settingsPanelContainer = null
+        settingsSession++
         binding.settingsHost.removeAllViews()
         binding.settingsHost.isVisible = false
         // Пульт всегда ландшафтный: после закрытия настроек возвращаем окно в него.
@@ -863,6 +884,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // и вызывает `stopPreview()` → `stopCamera()` — камера перезапускается, на экране чёрные
         // кадры, плашка счёта мигает (проверено на устройстве).
         val dual = recordingCapable
+        // Потолок зависит от разрешения эфира: 720p не нужны 1080p-мегабиты,
+        // а каждый лишний мегабит — это лишний нагрев телефона.
+        bitrateAdapter.maxBitrate = if (dual) {
+            StreamConfig.MAX_BITRATE_720P
+        } else {
+            StreamConfig.MAX_BITRATE_1080P
+        }
         val videoPrepared = when {
             dual -> camera.prepareVideo(
                 StreamConfig.STREAM_WIDTH,
@@ -1530,6 +1558,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         updateUi()
     }
 
+    /** Немедленно применяет текущий целевой битрейт к энкодеру (после смены потолка). */
+    private fun applyBitrateNow() {
+        val camera = rtmpCamera2 ?: return
+        if (!camera.isStreaming) return
+        try {
+            camera.setVideoBitrateOnFly(bitrateAdapter.targetBitrate)
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось применить битрейт", e)
+        }
+    }
+
     private fun updateBitrateStats(camera: RtmpCamera2) {
         val stats = bitrateAdapter.onStats(SystemClock.elapsedRealtime(), safeBytesSent(camera)) ?: return
 
@@ -1572,7 +1611,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         val sent = runCatching { client.getSentVideoFrames() }.getOrDefault(0L)
         val dropped = runCatching { client.getDroppedVideoFrames() }.getOrDefault(0L)
-        val cache = runCatching { client.getCacheSize() }.getOrDefault(0)
+        val queue = runCatching { client.getItemsInCache() }.getOrDefault(0)
+        val capacity = runCatching { client.getCacheSize() }.getOrDefault(0)
         val congest = runCatching { client.hasCongestion(CONGESTION_PERCENT) }.getOrDefault(false)
         val bytes = safeBytesSent(camera)
 
@@ -1585,14 +1625,16 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             TAG,
             String.format(
                 Locale.US,
-                "телеметрия: цель %.2f Мбит, кадров %d, дроп %d (+%d, %.1f%%), кэш %d, " +
-                    "затор %s, отправлено %.1f МБ, термо %s",
+                "телеметрия: цель %.2f Мбит (потолок %.2f), кадров %d, дроп %d (+%d, %.1f%%), " +
+                    "очередь %d/%d, затор %s, отправлено %.1f МБ, термо %s",
                 bitrateAdapter.targetBitrate / MEGABIT,
+                bitrateAdapter.effectiveMax / MEGABIT,
                 sent,
                 dropped,
                 droppedDelta,
                 dropPercent,
-                cache,
+                queue,
+                capacity,
                 if (congest) "да" else "нет",
                 bytes / MEGABIT,
                 thermalLabel(thermalStatus)
@@ -1612,6 +1654,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val previous = thermalStatus
         thermalStatus = status
         Log.i(TAG, "термостатус: ${thermalLabel(status)} ($status), было ${thermalLabel(previous)}")
+        // Эфир не останавливаем: при нагреве снижаем потолок битрейта, качество деградирует.
+        bitrateAdapter.thermalFactor = when {
+            status >= PowerManager.THERMAL_STATUS_CRITICAL -> 0.5f
+            status >= PowerManager.THERMAL_STATUS_SEVERE -> 0.7f
+            else -> 1f
+        }
+        Log.i(
+            TAG,
+            "битрейт с учётом нагрева: цель ${bitrateAdapter.targetBitrate / 1024} кбит/с, " +
+                "потолок ${bitrateAdapter.effectiveMax / 1024} кбит/с"
+        )
+        applyBitrateNow()
         when {
             status >= PowerManager.THERMAL_STATUS_CRITICAL &&
                 previous < PowerManager.THERMAL_STATUS_CRITICAL ->
@@ -1657,7 +1711,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             val bottom = safe.bottom + corner
 
             view.updatePadding(left = left, top = top, right = right, bottom = bottom)
-            Log.i(TAG, "Безопасная зона: слева $left, сверху $top, справа $right, снизу $bottom px")
+            // Insets приходят на каждую перекладку (в том числе от панели настроек) —
+            // пишем только реальное изменение, иначе лог превращается в мусор.
+            val stamp = "$left/$top/$right/$bottom"
+            if (stamp != lastSafeArea) {
+                lastSafeArea = stamp
+                Log.i(TAG, "Безопасная зона: слева $left, сверху $top, справа $right, снизу $bottom px")
+            }
             insets
         }
     }

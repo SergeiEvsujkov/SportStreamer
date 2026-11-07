@@ -15,7 +15,7 @@ import kotlin.math.abs
 class BitrateAdapter(
     initialBitrate: Int = StreamConfig.INITIAL_BITRATE,
     private val minBitrate: Int = StreamConfig.MIN_BITRATE,
-    private val maxBitrate: Int = StreamConfig.MAX_BITRATE
+    maxBitrate: Int = StreamConfig.MAX_BITRATE
 ) {
 
     /** Результат одного замера. */
@@ -25,7 +25,31 @@ class BitrateAdapter(
         val newTargetBitrate: Int?
     )
 
-    var targetBitrate: Int = initialBitrate.coerceIn(minBitrate, maxBitrate)
+    /**
+     * Верхняя граница битрейта. Зависит от разрешения эфира: 720p не нуждается
+     * в 1080p-битрейте, а лишние мегабиты — это лишний нагрев.
+     */
+    var maxBitrate: Int = maxBitrate.coerceAtLeast(minBitrate)
+        set(value) {
+            field = value.coerceAtLeast(minBitrate)
+            if (targetBitrate > effectiveMax) targetBitrate = effectiveMax
+        }
+
+    /**
+     * Множитель от термоконтроля: 1.0 — норма, 0.7 — сильный нагрев, 0.5 — критично.
+     * Эфир при этом не останавливается — снижается только качество.
+     */
+    var thermalFactor: Float = 1f
+        set(value) {
+            field = value.coerceIn(0.3f, 1f)
+            if (targetBitrate > effectiveMax) targetBitrate = effectiveMax
+        }
+
+    /** Фактическая верхняя граница с учётом нагрева. */
+    val effectiveMax: Int
+        get() = (maxBitrate * thermalFactor).toInt().coerceAtLeast(minBitrate)
+
+    var targetBitrate: Int = initialBitrate.coerceIn(minBitrate, effectiveMax)
         private set
 
     private val history = ArrayDeque<Int>()
@@ -80,7 +104,7 @@ class BitrateAdapter(
             // Сеть успевает за целевым битрейтом — пробуем поднять его.
             else -> (targetBitrate * 1.1).toInt()
         }
-        return candidate.coerceIn(minBitrate, maxBitrate)
+        return candidate.coerceIn(minBitrate, effectiveMax)
     }
 
     /** Медиана последних значений сглаживает одиночные выбросы. */
