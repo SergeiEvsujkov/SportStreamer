@@ -10,11 +10,13 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.util.Range
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -419,6 +421,30 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /**
+     * Раскладывает панель как портретный экран внутри ландшафтного окна.
+     *
+     * Локальные размеры: ширина = высоте окна, высота = ширине окна. После поворота на 90°
+     * ограничивающий прямоугольник совпадает с окном, а содержимое читается так, будто
+     * телефон держат вертикально. Ориентация самого окна при этом не меняется — поверхность
+     * превью не пересоздаётся, и запись продолжается.
+     */
+    private fun applyPortraitLayout(host: FrameLayout, panel: View) {
+        val hostWidth = host.width
+        val hostHeight = host.height
+        if (hostWidth == 0 || hostHeight == 0) return
+
+        // 90° — читаемый текст, если телефон поворачивают верхним краем влево.
+        // При обратном хвате достаточно поменять знак на -90f.
+        panel.rotation = 90f
+        val params = panel.layoutParams as? FrameLayout.LayoutParams
+            ?: FrameLayout.LayoutParams(hostHeight, hostWidth, Gravity.CENTER)
+        params.width = hostHeight
+        params.height = hostWidth
+        params.gravity = Gravity.CENTER
+        panel.layoutParams = params
+    }
+
+    /**
      * Показывает настройки панелью поверх пульта.
      *
      * Отдельная активити для этого не годится: её запуск переводит пульт в `onPause`
@@ -431,13 +457,24 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         val panelBinding = ActivitySettingsBinding.inflate(layoutInflater, binding.settingsHost, false)
         binding.settingsHost.removeAllViews()
+        // Ребёнок будет больше окна по высоте и повёрнут — обрезать его нельзя.
+        binding.settingsHost.clipChildren = false
+        binding.settingsHost.clipToPadding = false
         binding.settingsHost.addView(
             panelBinding.root,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+        // Настройки всегда вертикальные, а пульт — всегда ландшафтный. Менять ориентацию
+        // окна нельзя: это пересоздало бы поверхность превью и прервало запись. Поэтому
+        // панель раскладывается как портретный экран (высота окна × ширина окна) и
+        // поворачивается на 90°: телефон держат вертикально, и содержимое читается нормально.
+        applyPortraitLayout(binding.settingsHost, panelBinding.root)
+        binding.settingsHost.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            applyPortraitLayout(binding.settingsHost, panelBinding.root)
+        }
         // Панель занимает весь экран, поэтому отступы системных панелей добавляем сами.
         ViewCompat.setOnApplyWindowInsetsListener(panelBinding.root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
