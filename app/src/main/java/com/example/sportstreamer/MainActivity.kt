@@ -1155,7 +1155,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         else updateRecordTime()
 
         binding.streamBtn.setImageResource(
-            if (rtmpCamera2?.isStreaming == true) R.drawable.ic_pause else R.drawable.ic_link
+            if (rtmpCamera2?.isStreaming == true || recording) R.drawable.ic_pause else R.drawable.ic_link
         )
         binding.recordBtn.setImageResource(if (recording) R.drawable.ic_pause else R.drawable.ic_record)
         binding.streamBtn.isEnabled = hasCameraAndAudioPermissions()
@@ -1166,7 +1166,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Кнопки выключенных режимов гасим, но оставляем кликабельными, чтобы объяснить причину.
         val broadcastEnabled = settings.broadcastEnabled
         binding.broadcastRow.visibility = if (broadcastEnabled) View.VISIBLE else View.GONE
-        binding.streamBtn.alpha = if (broadcastEnabled) 1f else DISABLED_ALPHA
+        // Кнопка одна на оба режима: в «только запись» эфир выключен, но кнопка рабочая,
+        // поэтому гасим её лишь когда не включён ни один режим.
+        val anyModeEnabled = broadcastEnabled || recordingEnabled
+        binding.streamBtn.alpha = if (anyModeEnabled) 1f else DISABLED_ALPHA
         binding.recordBtn.alpha = if (recordingEnabled) 1f else DISABLED_ALPHA
 
         // Пилюля битрейта не должна оставаться пустой: заполняем её, только если там ещё ничего нет,
@@ -1785,6 +1788,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             Log.i(TAG, "Запись во время эфира: пишу текущим энкодером (качество эфира)")
         }
         if (!camera.isStreaming) {
+            // prepareVideo() пересобирает GL, но камеру при совпадающем размере не перезапускает:
+            // без этого оставался чёрный кадр, поверх которого рисовалось табло.
+            try {
+                camera.stopPreview()
+            } catch (e: Exception) {
+                Log.w(TAG, "Не удалось остановить превью перед подготовкой записи", e)
+            }
+            previewRunning = false
             if (!prepareEncoders(forStream = false)) {
                 toast(getString(R.string.main_stream_prepare_failed))
                 return
