@@ -328,18 +328,31 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         handler.removeCallbacksAndMessages(null)
 
         val camera = rtmpCamera2
-        try {
-            if (camera != null) {
+        if (camera != null) {
+            // Каждый шаг отдельно: если один упадёт, остальные всё равно должны выполниться.
+            try {
                 if (isRecordingNow) camera.stopRecord()
-                if (camera.isStreaming) camera.stopStream()
-                camera.stopPreview()
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка остановки записи при закрытии", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка остановки RTMP", e)
+            try {
+                if (camera.isStreaming) camera.stopStream()
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка остановки RTMP при закрытии", e)
+            }
+            try {
+                camera.stopPreview()
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка остановки превью при закрытии", e)
+            }
         }
 
-        // Если запись почему-то ещё активна, файл недописан — удаляем, чтобы в галерее не было мусора.
-        recorder?.let { if (it.isActive) it.discard() }
+        // Запись ещё активна (приложение закрыли, не доведя до onPause): доводим файл
+        // до конца и публикуем. discard() — только если финализация не удалась,
+        // иначе вместе с мусором удалялся бы целый матч.
+        if (recorder?.isActive == true) {
+            if (recorder?.stop() != true) recorder?.discard()
+        }
 
         surfaceHolderCallback?.let { binding.openGlView.holder.removeCallback(it) }
         surfaceHolderCallback = null
