@@ -99,6 +99,9 @@
     <!-- Термоконтроль: система сообщает о нагреве, предупреждаем оператора. -->
     <string name="main_thermal_warning">Телефон нагрелся — качество эфира может просесть</string>
     <string name="main_thermal_critical">Телефон перегрет — остановите эфир или снизьте нагрузку</string>
+
+    <!-- Включение второго энкодера требует перезапуска эфира на 1–2 секунды. -->
+    <string name="main_dual_switch">Включаю запись в 1080p — эфир прервётся на пару секунд</string>
     <string name="main_stream_started">Запуск трансляции</string>
     <string name="main_stream_stopping">Остановка трансляции</string>
     <string name="main_stream_stopped">Трансляция завершена!</string>

@@ -88,6 +88,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Контейнер панели настроек: он же приёмник смахивания и объект поворота. */
     private var settingsPanelContainer: SwipeDismissFrameLayout? = null
 
+    /** Запрошен ли второй энкодер на следующую подготовку (переключение во время эфира). */
+    private var forceDualEncoders = false
+
+    /** Подняты ли сейчас два энкодера: эфирный 720p и записывающий 1080p. */
+    private var dualEncodersActive = false
+
     /** Номер сессии открытия настроек: отсекает устаревшие запросы ориентации. */
     private var settingsSession = 0
 
@@ -864,9 +870,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      */
     private fun prepareEncoders(forStream: Boolean): Boolean {
         val camera = rtmpCamera2 ?: return false
-        // Второй энкодер записи имеет смысл, только если запись вообще разрешена в настройках:
-        // тогда её можно включить на ходу, не перезапуская эфир.
-        val recordingCapable = settings.saveVideoLocally
         val streamBitrate = bitrateAdapter.targetBitrate
         val recordBitrate = RecordingBitrate.bitsPerSecond(settings.recordBitrateMbps)
         // Ориентация нужна, если передаём параметры энкодера записи вручную (11-аргументный
@@ -874,16 +877,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val rotation = CameraHelper.getCameraOrientation(this)
 
         // Режимы:
-        //  • запись разрешена — всегда два энкодера: эфир 720p с битрейтом потока и запись 1080p
-        //    со своим битрейтом. RootEncoder включает второй энкодер, только когда разрешения
-        //    различаются (соотношение сторон обязано совпадать);
-        //  • запись выключена — один энкодер 1080p с битрейтом потока.
-        //
-        // Режим НЕ зависит от того, что запускают: размеры кадра остаются одинаковыми на весь
-        // сеанс. Иначе `prepareVideo()` видит, что ширина кадра не совпадает с шириной превью,
-        // и вызывает `stopPreview()` → `stopCamera()` — камера перезапускается, на экране чёрные
-        // кадры, плашка счёта мигает (проверено на устройстве).
-        val dual = recordingCapable
+        //  • «только эфир» — один энкодер 1080p с битрейтом потока. Второй кодек здесь
+        //    кодировал бы 1080p вхолостую и грел телефон (по логу: критический нагрев
+        //    наступал за 12 минут);
+        //  • «эфир + запись» — два энкодера: эфир 720p и запись 1080p со своим битрейтом.
+        //    RootEncoder включает второй энкодер, только когда разрешения различаются
+        //    (соотношение сторон обязано совпадать). Добавить его на ходу нельзя —
+        //    `prepareVideo()` останавливает текущий, поэтому первое включение записи
+        //    во время эфира перезапускает поток на пару секунд;
+        //  • «только запись» — один энкодер 1080p с битрейтом записи.
+        val dual = forceDualEncoders && settings.saveVideoLocally
+        dualEncodersActive = dual
         // Потолок зависит от разрешения эфира: 720p не нужны 1080p-мегабиты,
         // а каждый лишний мегабит — это лишний нагрев телефона.
         bitrateAdapter.maxBitrate = if (dual) {
@@ -1313,6 +1317,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      */
     private fun startRecording() {
         val camera = rtmpCamera2 ?: return
+        if (camera.isStreaming && !dualEncodersActive) {
+            // Эфир идёт с одним энкодером (режим «только эфир»): чтобы писать 1080p своим
+            // битрейтом, нужен второй. RootEncoder не добавляет его на ходу — перезапускаем поток.
+            switchToDualEncodersAndRecord()
+            return
+        }
         if (!camera.isStreaming) {
             if (!prepareEncoders(forStream = false)) {
                 toast(getString(R.string.main_stream_prepare_failed))
@@ -1353,6 +1363,32 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         updateUi()
     }
 
+    /**
+     * Включает второй энкодер (1080p) во время эфира и сразу начинает запись.
+     *
+     * RootEncoder не умеет добавлять энкодер на ходу: `prepareVideo()` останавливает текущий,
+     * поэтому поток поднимается заново — это стоит 1–2 секунды эфира. Зато в режиме «только
+     * эфир» телефон не кодирует второй поток вхолостую и меньше греется.
+     */
+    private fun switchToDualEncodersAndRecord() {
+        if (!settings.saveVideoLocally) return
+        Log.i(TAG, "Включаю второй энкодер записи: эфир перезапустится на 1–2 секунды")
+        toast(getString(R.string.main_dual_switch))
+        forceDualEncoders = true
+        try {
+            stopStreamOnly()
+            startBroadcast()
+        } finally {
+            forceDualEncoders = false
+        }
+        if (dualEncodersActive && rtmpCamera2?.isStreaming == true) {
+            startRecording()
+        } else {
+            Log.w(TAG, "Переключение на два энкодера не удалось — запись не начата")
+            toast(getString(R.string.main_recording_failed))
+        }
+    }
+
     private fun startBroadcast() {
         val camera = rtmpCamera2 ?: return
         val url = settings.fullRtmpUrl
@@ -1375,7 +1411,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
 
         // Перед каждым запуском: stopStream() сбрасывает prepared у энкодеров и закрывает камеру.
-        if (!prepareEncoders(forStream = true)) {
+        // Если запись шла до старта эфира, нужен второй энкодер: иначе файл писался бы
+        // с разрешением и битрейтом потока.
+        val previousForceDual = forceDualEncoders
+        forceDualEncoders = previousForceDual || wasRecording
+        val encodersPrepared = prepareEncoders(forStream = true)
+        forceDualEncoders = previousForceDual
+        if (!encodersPrepared) {
             toast(getString(R.string.main_stream_prepare_failed))
             return
         }
