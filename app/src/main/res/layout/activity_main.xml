@@ -382,17 +382,11 @@
                 android:textColor="?attr/colorOnSurfaceVariant"
                 tools:text="Запись не идёт" />
 
-            <!-- Распорка: кнопки всегда прижаты к правому краю. -->
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
+            <!-- Запись — слева, пульт рядом с ней; настройки и полный экран — у правого края. -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/streamBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:backgroundTint="@color/record_button"
                 android:contentDescription="@string/desc_toggle_stream"
                 app:fabCustomSize="40dp"
@@ -415,19 +409,6 @@
                 app:tint="@color/white" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/fullscreenBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:backgroundTint="?attr/colorSurfaceContainerHighest"
-                android:contentDescription="@string/desc_toggle_fullscreen"
-                app:fabCustomSize="40dp"
-                app:fabSize="normal"
-                app:maxImageSize="20dp"
-                app:srcCompat="@drawable/ic_fullscreen"
-                app:tint="?attr/colorOnSurfaceVariant" />
-
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/remoteBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -440,6 +421,12 @@
                 app:srcCompat="@drawable/ic_remote"
                 app:tint="?attr/colorOnSurfaceVariant" />
 
+            <!-- Распорка: настройки и полный экран прижаты к правому краю. -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/settingsBtn"
                 android:layout_width="wrap_content"
@@ -451,6 +438,19 @@
                 app:fabSize="normal"
                 app:maxImageSize="20dp"
                 app:srcCompat="@drawable/ic_settings"
+                app:tint="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fullscreenBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="?attr/colorSurfaceContainerHighest"
+                android:contentDescription="@string/desc_toggle_fullscreen"
+                app:fabCustomSize="40dp"
+                app:fabSize="normal"
+                app:maxImageSize="20dp"
+                app:srcCompat="@drawable/ic_fullscreen"
                 app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
     </LinearLayout>
