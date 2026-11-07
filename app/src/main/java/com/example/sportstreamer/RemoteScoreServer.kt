@@ -19,6 +19,7 @@ import kotlin.concurrent.thread
  * достаточно, чтобы телефоны были в одной сети.
  */
 class RemoteScoreServer(
+    private val context: android.content.Context,
     private val pin: String,
     private val listener: Listener
 ) {
@@ -31,6 +32,7 @@ class RemoteScoreServer(
     }
 
     private val main = Handler(Looper.getMainLooper())
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private var serverSocket: ServerSocket? = null
     private var client: Socket? = null
     @Volatile
@@ -40,6 +42,16 @@ class RemoteScoreServer(
     fun start() {
         if (running) return
         running = true
+        // Держим Wi-Fi активным: иначе при погасшем экране радио уходит в сон и пульт отваливается.
+        try {
+            val wifi = context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+            wifiLock = wifi?.createWifiLock(
+                android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                "sportstreamer-remote"
+            )?.apply { setReferenceCounted(false); acquire() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Не удалось удержать Wi-Fi", e)
+        }
         thread(name = "remote-score-server", isDaemon = true) {
             try {
                 val socket = ServerSocket(RemoteScoreProtocol.PORT)
@@ -91,6 +103,13 @@ class RemoteScoreServer(
                     }
 
                     RemoteScoreProtocol.CMD_UNDO -> main.post { listener.onUndo() }
+
+                    // Heartbeat: отвечаем сразу, чтобы пульт видел живое соединение
+                    // и Wi-Fi не уходил в энергосбережение.
+                    RemoteScoreProtocol.CMD_PING -> {
+                        writer.write(RemoteScoreProtocol.response(true) + "\n")
+                        writer.flush()
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -108,6 +127,12 @@ class RemoteScoreServer(
     /** Останавливает сервер и закрывает текущее подключение. */
     fun stop() {
         running = false
+        try {
+            wifiLock?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Ошибка освобождения Wi-Fi lock", e)
+        }
+        wifiLock = null
         try {
             client?.close()
         } catch (_: Exception) {

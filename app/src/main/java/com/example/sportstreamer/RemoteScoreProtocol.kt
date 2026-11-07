@@ -17,6 +17,7 @@ object RemoteScoreProtocol {
     const val CMD_HELLO = "hello"
     const val CMD_POINT = "point"
     const val CMD_UNDO = "undo"
+    const val CMD_PING = "ping"
 
     const val FIELD_CMD = "cmd"
     const val FIELD_PIN = "pin"
@@ -34,6 +35,9 @@ object RemoteScoreProtocol {
             .toString()
 
     fun undo(): String = JSONObject().put(FIELD_CMD, CMD_UNDO).toString()
+
+    /** Проверка живости соединения: без трафика Wi-Fi усыпляет сокет. */
+    fun ping(): String = JSONObject().put(FIELD_CMD, CMD_PING).toString()
 
     fun hello(pin: String): String =
         JSONObject()

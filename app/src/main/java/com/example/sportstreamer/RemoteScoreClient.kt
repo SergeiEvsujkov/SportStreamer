@@ -65,6 +65,16 @@ class RemoteScoreClient(
                 }
 
                 main.post { listener.onConnected() }
+                // Heartbeat: раз в 5 секунд, чтобы соединение не считалось простаивающим.
+                val ping = object : Runnable {
+                    override fun run() {
+                        if (running) {
+                            send(RemoteScoreProtocol.ping())
+                            main.postDelayed(this, PING_INTERVAL_MS)
+                        }
+                    }
+                }
+                main.postDelayed(ping, PING_INTERVAL_MS)
                 // Держим соединение: читаем ответы, пока сервер не закроет сокет.
                 while (running) {
                     if (reader.readLine() == null) break
@@ -112,5 +122,6 @@ class RemoteScoreClient(
         const val TAG = "RemoteScoreClient"
         const val CONNECT_TIMEOUT_MS = 5000
         const val READ_TIMEOUT_MS = 0
+        const val PING_INTERVAL_MS = 5000L
     }
 }

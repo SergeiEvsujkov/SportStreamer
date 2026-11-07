@@ -366,6 +366,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         StreamService.stop(this)
         remoteServer?.stop()
         remoteServer = null
+        remoteHotspot?.stop()
+        remoteHotspot = null
         panelLayoutListener?.let { binding.settingsHost.removeOnLayoutChangeListener(it) }
         panelLayoutListener = null
         stopZoomHold()
@@ -625,10 +627,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      */
     private fun showRemoteDialog() {
         if (remoteServer != null) return
-        val pin = RemoteScoreProtocol.generatePin()
+        // Сервер живёт до destroy: закрытие диалога не должно рвать связь с пультом.
+        val alreadyRunning = remoteServer != null
+        val pin = if (alreadyRunning && remotePin.isNotEmpty()) remotePin else RemoteScoreProtocol.generatePin()
         remotePin = pin
         val address = localIpAddress()
-        val server = RemoteScoreServer(pin, object : RemoteScoreServer.Listener {
+        val server = RemoteScoreServer(this, pin, object : RemoteScoreServer.Listener {
             override fun onPoint(team: Int, add: Boolean) {
                 onPoint(if (team == 1) ScoreEngine.Team.FIRST else ScoreEngine.Team.SECOND, add)
             }
@@ -645,8 +649,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 toast(getString(R.string.remote_disconnected))
             }
         })
-        remoteServer = server
-        server.start()
+        if (!alreadyRunning) {
+            remoteServer = server
+            server.start()
+        }
 
         val message = if (address == null) {
             getString(R.string.remote_no_address, pin)
@@ -724,13 +730,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             .setView(container)
             .setPositiveButton(android.R.string.ok, null)
             .setOnDismissListener {
-                remoteServer?.stop()
-                remoteServer = null
-                remoteHotspot?.stop()
-                remoteHotspot = null
+                // Сервер и точка доступа продолжают работать: иначе свёрнутый экран
+                // или закрытый диалог обрывали связь с пультом.
                 remoteQrView = null
-                hotspotSsid = ""
-                hotspotPassword = ""
             }
             .show()
     }
