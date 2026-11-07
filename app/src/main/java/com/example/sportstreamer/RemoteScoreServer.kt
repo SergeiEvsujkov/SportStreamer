@@ -53,8 +53,10 @@ class RemoteScoreServer(
         // Держим Wi-Fi активным: иначе при погасшем экране радио уходит в сон и пульт отваливается.
         try {
             val wifi = context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+            // LOW_LATENCY вместо устаревшего HIGH_PERF: нужен тот же эффект — не дать
+            // радио уйти в энергосбережение, пока открыт пульт.
             wifiLock = wifi?.createWifiLock(
-                android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY,
                 "sportstreamer-remote"
             )?.apply { setReferenceCounted(false); acquire() }
         } catch (e: Exception) {
