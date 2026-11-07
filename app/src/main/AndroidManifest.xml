@@ -33,6 +33,11 @@
 
         SportStreamerApp применяет выбранную тему до создания первого экрана.
     -->
+    <!-- SDK обновлений проверяет, установлен ли RuStore. -->
+    <queries>
+        <package android:name="ru.vk.store" />
+    </queries>
+
     <application
         android:name=".SportStreamerApp"
         android:allowBackup="false"

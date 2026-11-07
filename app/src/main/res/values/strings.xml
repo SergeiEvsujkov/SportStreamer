@@ -3,6 +3,10 @@
     <string name="app_name">SportStreamer</string>
 
     <!-- Экран настроек -->
+    <string name="update_available_title">Доступно обновление</string>
+    <string name="update_available_message">Вышла новая версия приложения с исправлениями. Обновить сейчас?</string>
+    <string name="update_available_yes">Обновить</string>
+    <string name="update_available_later">Позже</string>
     <string name="settings_guide_title">Инструкция</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_team1_header">КОМАНДА 1</string>

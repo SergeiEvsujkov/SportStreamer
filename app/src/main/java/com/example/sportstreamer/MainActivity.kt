@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             if (!camera.isStreaming) return
             updateBitrateStats(camera)
             // Держим плашки в актуальном состоянии: соединение может пропасть между кликами.
-            updateUi()
+        updateUi()
             handler.postDelayed(this, BitrateAdapter.UPDATE_INTERVAL_MS)
         }
     }
@@ -229,6 +229,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Проверка обновлений: сборка для RuStore предложит обновиться, обычная — молчит.
+        AppUpdater.checkForUpdate(this)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {

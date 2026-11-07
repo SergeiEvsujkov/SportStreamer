@@ -20,6 +20,8 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        // Репозиторий RuStore: из него приходит SDK обновлений (только вариант rustore).
+        maven { url = uri("https://nexus-external.rustore.ru/repository/maven-rustore-exposed") }
     }
 }
 

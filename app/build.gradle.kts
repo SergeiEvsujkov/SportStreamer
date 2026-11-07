@@ -33,6 +33,22 @@ android {
         }
     }
 
+    /**
+     * Две версии приложения:
+     * rustore — для RuStore, с SDK обновлений;
+     * direct  — обычная сборка без магазина и без обращений к RuStore.
+     */
+    flavorDimensions += "store"
+    productFlavors {
+        create("rustore") {
+            dimension = "store"
+            versionNameSuffix = "-rustore"
+        }
+        create("direct") {
+            dimension = "store"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -64,6 +80,10 @@ dependencies {
     // QR-сопряжение удалённого пульта: генерация кода и сканирование камерой.
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
+    // SDK обновлений RuStore подключается только в варианте rustore.
+    "rustoreImplementation"(platform("ru.rustore.sdk:bom:2026.10.01"))
+    "rustoreImplementation"("ru.rustore.sdk:appupdate")
 
     // Палитра выбора цвета собирается из MaterialCardView, отдельная библиотека не нужна.
 }
