@@ -369,6 +369,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         if (isFinishing) {
             remoteServer?.stop()
             remoteServer = null
+            remoteWeb?.stop()
+            remoteWeb = null
             remoteHotspot?.stop()
             remoteHotspot = null
         }
@@ -604,6 +606,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Закрывает панель и применяет изменившиеся настройки к пульту. */
     /** Локальная точка доступа: поднимается по кнопке, чтобы второму телефону было к чему подключаться. */
     private var remoteHotspot: RemoteHotspot? = null
+    private var remoteWeb: RemoteWebServer? = null
     private var hotspotSsid: String = ""
     private var hotspotPassword: String = ""
     private var remoteQrView: android.widget.ImageView? = null
@@ -676,6 +679,33 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             remoteServer = server
             server.start()
         }
+        if (remoteWeb == null) {
+            remoteWeb = RemoteWebServer(
+                token = pin,
+                stateProvider = {
+                    RemoteScoreProtocol.state(
+                        team1Score = engine.team1Score,
+                        team2Score = engine.team2Score,
+                        team1Sets = engine.team1Sets,
+                        team2Sets = engine.team2Sets,
+                        game = engine.team1Sets + engine.team2Sets + 1,
+                        setPending = setFinishedDialog != null,
+                        matchOver = engine.isMatchOver,
+                        setsToWin = settings.setsToWin,
+                        team1Name = settings.team1Name,
+                        team2Name = settings.team2Name
+                    )
+                },
+                pointHandler = { team, add ->
+                    handler.post {
+                        onPoint(
+                            if (team == 1) ScoreEngine.Team.FIRST else ScoreEngine.Team.SECOND,
+                            add
+                        )
+                    }
+                }
+            ).also { it.start() }
+        }
 
         val message = if (address == null) {
             getString(R.string.remote_no_address, pin)
@@ -736,15 +766,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
             android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
         ))
-        right.addView(com.google.android.material.button.MaterialButton(this).apply {
-            text = getString(R.string.remote_client_short)
-            setOnClickListener {
-                startActivity(android.content.Intent(this@MainActivity, RemoteControlActivity::class.java))
-            }
-        }, android.widget.LinearLayout.LayoutParams(
-            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (8 * density).toInt() })
 
         container.addView(right)
 
@@ -801,16 +822,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Содержимое QR: адрес, код и, если точка поднята, данные сети. */
-    private fun buildRemoteQrPayload(address: String): String {
-        val base = "sportstreamer://remote?address=$address:${RemoteScoreProtocol.PORT}" +
-            "&pin=${currentRemotePin()}"
-        return if (hotspotSsid.isNotEmpty()) {
-            "$base&ssid=${android.net.Uri.encode(hotspotSsid)}" +
-                "&pass=${android.net.Uri.encode(hotspotPassword)}"
-        } else {
-            base
-        }
-    }
+    private fun buildRemoteQrPayload(address: String): String =
+        // QR ведёт на страницу в браузере: второму телефону приложение не нужно.
+        "http://$address:${RemoteWebServer.PORT}/?t=${currentRemotePin()}"
 
     /** Код сопряжения текущей сессии пульта (тот, что показан в диалоге). */
     private fun currentRemotePin(): String = remotePin
