@@ -634,15 +634,63 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             getString(R.string.remote_dialog_message, "$address:${RemoteScoreProtocol.PORT}", pin)
         }
 
+        // QR содержит адрес, порт и код: второму телефону достаточно его отсканировать.
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (20 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, 0)
+        }
+        if (address != null) {
+            val payload = "sportstreamer://remote?address=$address:${RemoteScoreProtocol.PORT}&pin=$pin"
+            generateQrCode(payload)?.let { bitmap ->
+                container.addView(
+                    android.widget.ImageView(this).apply { setImageBitmap(bitmap) },
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
+        }
+        container.addView(android.widget.TextView(this).apply {
+            text = message
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(0, pad, 0, 0)
+        })
+
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.remote_dialog_title)
-            .setMessage(message)
+            .setView(container)
             .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(R.string.remote_button_client) { _, _ ->
+                startActivity(android.content.Intent(this, RemoteControlActivity::class.java))
+            }
             .setOnDismissListener {
                 remoteServer?.stop()
                 remoteServer = null
             }
             .show()
+    }
+
+    /** Рисует QR-код с данными сопряжения. */
+    private fun generateQrCode(payload: String): android.graphics.Bitmap? = try {
+        val size = 512
+        val matrix = com.google.zxing.qrcode.QRCodeWriter()
+            .encode(payload, com.google.zxing.BarcodeFormat.QR_CODE, size, size)
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.RGB_565)
+        for (x in 0 until size) {
+            for (y in 0 until size) {
+                bitmap.setPixel(
+                    x,
+                    y,
+                    if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                )
+            }
+        }
+        bitmap
+    } catch (e: Exception) {
+        Log.w(TAG, "Не удалось построить QR-код", e)
+        null
     }
 
     /** Адрес телефона в локальной сети: первый IPv4, не относящийся к loopback. */

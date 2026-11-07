@@ -61,5 +61,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
+    // QR-сопряжение удалённого пульта: генерация кода и сканирование камерой.
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
     // Палитра выбора цвета собирается из MaterialCardView, отдельная библиотека не нужна.
 }

@@ -175,5 +175,28 @@
     <string name="remote_connected">Пульт подключён</string>
     <string name="remote_disconnected">Пульт отключён</string>
 
+    <!-- Экран пульта на втором телефоне -->
+    <string name="remote_client_title">Удалённый пульт</string>
+    <string name="remote_client_connection_type">Как подключён телефон</string>
+    <string name="remote_client_type_wifi">Общий Wi-Fi</string>
+    <string name="remote_client_type_hotspot">Точка доступа источника</string>
+    <string name="remote_client_address">Адрес источника</string>
+    <string name="remote_client_address_wifi">Например, 192.168.1.10:8642</string>
+    <string name="remote_client_address_hotspot">Обычно 192.168.43.1:8642</string>
+    <string name="remote_client_pin">Код с экрана источника</string>
+    <string name="remote_client_connect">Подключиться</string>
+    <string name="remote_client_scan">Сканировать QR</string>
+    <string name="remote_client_scan_prompt">Наведите камеру на QR-код на телефоне-источнике</string>
+    <string name="remote_client_status_idle">Не подключено</string>
+    <string name="remote_client_status_connecting">Подключение…</string>
+    <string name="remote_client_status_connected">Пульт подключён</string>
+    <string name="remote_client_status_disconnected">Соединение потеряно</string>
+    <string name="remote_client_bad_qr">Это не код SportStreamer</string>
+    <string name="remote_client_fill_fields">Введите адрес и четырёхзначный код</string>
+    <string name="remote_client_not_connected">Сначала подключитесь к источнику</string>
+    <string name="remote_client_team1">Команда 1</string>
+    <string name="remote_client_team2">Команда 2</string>
+    <string name="remote_button_client">Я пульт: подключиться к другому телефону</string>
+
 </resources>
 
