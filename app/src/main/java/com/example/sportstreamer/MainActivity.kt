@@ -323,6 +323,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     override fun onDestroy() {
         super.onDestroy()
+        StreamService.stop(this)
         stopZoomHold()
         powerManager?.removeThermalStatusListener(thermalListener)
         handler.removeCallbacksAndMessages(null)
@@ -1268,6 +1269,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 if (camera.isStreaming && !isRecordingNow) startLocalRecording()
             }
         }
+        // Пока идёт сессия, держим процесс в foreground: иначе Android запретит камеру в фоне.
+        if (camera.isStreaming || isRecordingNow) StreamService.start(this)
         updateUi()
     }
 
@@ -1275,6 +1278,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private fun stopSession() {
         if (rtmpCamera2?.isStreaming == true) toggleBroadcast()
         if (isRecordingNow) toggleRecording()
+        StreamService.stop(this)
         updateUi()
     }
 

@@ -155,5 +155,9 @@
     <string name="main_start">Старт</string>
     <string name="main_stop">Стоп</string>
 
+    <!-- Уведомление фонового сервиса во время эфира или записи -->
+    <string name="service_channel">Эфир и запись</string>
+    <string name="service_running">Идёт эфир или запись</string>
+
 </resources>
 
