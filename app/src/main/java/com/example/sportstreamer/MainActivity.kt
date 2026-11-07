@@ -775,7 +775,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         val addressView = android.widget.TextView(this).apply {
             text = when {
-                shownAddress == null -> getString(R.string.remote_no_network)
+                // Без сети вместо пустого адреса сразу говорим, что нужно сделать.
+                shownAddress == null -> getString(R.string.remote_no_network_hint)
                 apAddress != null -> getString(
                     R.string.remote_hotspot_address,
                     "$apAddress:${RemoteWebServer.PORT}"
@@ -805,8 +806,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         if (apAddress != null) {
             // Имя и пароль точки знает только сама система — их можно посмотреть в её настройках.
             networkView.text = getString(R.string.remote_hotspot_hint)
-        } else if (wifiAddress == null) {
-            networkView.text = getString(R.string.remote_no_network_hint)
         }
         right.addView(networkView)
 
@@ -908,37 +907,54 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      * Домашний Wi-Fi при этом обычно отключается, и прежний адрес становится недоступен
      * второму телефону. Ищем адрес, выданный интерфейсу точки (обычно 192.168.43.x).
      */
-    private fun findHotspotAddress(): String? = try {
+    /** Адрес интерфейса и признак того, что это точка доступа. */
+    private data class NetAddress(val iface: String, val address: String, val hotspot: Boolean)
+
+    /**
+     * Адреса, которые реально годятся для пульта: только Wi-Fi и точка доступа.
+     *
+     * Мобильный интернет и туннели не подходят — второй телефон до них не достанет.
+     * Раньше в список попадал первый попавшийся интерфейс, и при выключенном Wi-Fi
+     * окно показывало адрес сотовой сети.
+     */
+    private fun networkAddresses(): List<NetAddress> = try {
         java.net.NetworkInterface.getNetworkInterfaces().toList()
             .asSequence()
             .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList().asSequence() }
-            .filterIsInstance<java.net.Inet4Address>()
-            .mapNotNull { it.hostAddress }
-            .firstOrNull { it.startsWith("192.168.43.") || it.startsWith("192.168.49.") }
+            .flatMap { iface ->
+                iface.inetAddresses.toList().asSequence()
+                    .filterIsInstance<java.net.Inet4Address>()
+                    .filter { !it.isLoopbackAddress }
+                    .mapNotNull { addr -> addr.hostAddress?.let { iface.name to it } }
+                    .map { (name, address) -> NetAddress(name, address, isHotspotIface(name, address)) }
+            }
+            .toList()
     } catch (e: Exception) {
-        Log.w(TAG, "Не удалось определить адрес точки доступа", e)
-        null
+        Log.w(TAG, "Не удалось получить сетевые адреса", e)
+        emptyList()
     }
 
-    /** Адрес телефона в локальной сети: первый IPv4, не относящийся к loopback. */
-    private fun localIpAddress(): String? = try {
-        val addresses = java.net.NetworkInterface.getNetworkInterfaces().toList()
-            .asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList().asSequence() }
-            .filterIsInstance<java.net.Inet4Address>()
-            .filter { !it.isLoopbackAddress }
-            .mapNotNull { it.hostAddress }
-            .toList()
-        // Если включена точка доступа (наша или обычная), её адрес важнее домашнего:
-        // второй телефон видит телефон только в этой сети.
-        addresses.firstOrNull { it.startsWith("192.168.43.") || it.startsWith("192.168.49.") }
-            ?: addresses.firstOrNull()
-    } catch (e: Exception) {
-        Log.w(TAG, "Не удалось определить локальный адрес", e)
-        null
+    /** Точка доступа: интерфейсы с именами ap, softap, swlan, второй wlan или её подсети. */
+    private fun isHotspotIface(name: String, address: String): Boolean {
+        val lower = name.lowercase()
+        return lower.startsWith("ap") ||
+            lower.startsWith("softap") ||
+            lower.startsWith("swlan") ||
+            lower.startsWith("wlan1") ||
+            lower.startsWith("wlan2") ||
+            address.startsWith("192.168.43.") ||
+            address.startsWith("192.168.49.")
     }
+
+    /** Адрес включённой точки доступа или null, если её нет. */
+    private fun findHotspotAddress(): String? =
+        networkAddresses().firstOrNull { it.hotspot }?.address
+
+    /** Адрес Wi-Fi. null, если Wi-Fi выключен — сотовую сеть намеренно не берём. */
+    private fun localIpAddress(): String? =
+        networkAddresses()
+            .firstOrNull { !it.hotspot && it.iface.lowercase().startsWith("wlan") }
+            ?.address
 
     private fun hideSettingsPanel() {
         val panel = settingsPanel ?: return
