@@ -19,7 +19,7 @@
         android:id="@+id/previewFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="18dp"
         android:layout_marginTop="4dp"
         android:layout_marginEnd="-8dp"
         android:layout_marginBottom="-8dp"
@@ -382,7 +382,13 @@
                 android:textColor="?attr/colorOnSurfaceVariant"
                 tools:text="Запись не идёт" />
 
-            <!-- Запись — слева, пульт рядом с ней; настройки и полный экран — у правого края. -->
+            <!-- Распорка: все четыре кнопки собраны у правого края. -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Порядок: запись, пульт, настройки, полный экран в углу. -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/streamBtn"
                 android:layout_width="wrap_content"
@@ -399,7 +405,7 @@
                 android:id="@+id/recordBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="18dp"
                 android:backgroundTint="@color/record_button"
                 android:contentDescription="@string/desc_toggle_recording"
                 app:fabCustomSize="40dp"
@@ -412,7 +418,7 @@
                 android:id="@+id/remoteBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="18dp"
                 android:backgroundTint="?attr/colorSurfaceContainerHighest"
                 android:contentDescription="@string/desc_remote_control"
                 app:fabCustomSize="40dp"
@@ -421,17 +427,11 @@
                 app:srcCompat="@drawable/ic_remote"
                 app:tint="?attr/colorOnSurfaceVariant" />
 
-            <!-- Распорка: настройки и полный экран прижаты к правому краю. -->
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/settingsBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="18dp"
                 android:backgroundTint="?attr/colorSurfaceContainerHighest"
                 android:contentDescription="@string/desc_open_settings"
                 app:fabCustomSize="40dp"
@@ -444,7 +444,7 @@
                 android:id="@+id/fullscreenBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="18dp"
                 android:backgroundTint="?attr/colorSurfaceContainerHighest"
                 android:contentDescription="@string/desc_toggle_fullscreen"
                 app:fabCustomSize="40dp"
