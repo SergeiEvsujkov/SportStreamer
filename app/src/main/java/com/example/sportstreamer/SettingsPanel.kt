@@ -93,7 +93,10 @@ class SettingsPanel(
         // Инструкция: содержимое добавляется отдельно, пока кнопка только на месте.
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.action_guide -> true
+                R.id.action_guide -> {
+                    showGuide()
+                    true
+                }
                 else -> false
             }
         }
@@ -128,6 +131,41 @@ class SettingsPanel(
     }
 
     // ------------------------------------------------------------- настройки
+
+    /** Инструкция для пользователя: как работает, где взять ключи, пульт и предупреждения. */
+    private fun showGuide() {
+        val sections = listOf(
+            R.string.guide_how_title to R.string.guide_how_body,
+            R.string.guide_vk_title to R.string.guide_vk_body,
+            R.string.guide_yt_title to R.string.guide_yt_body,
+            R.string.guide_remote_title to R.string.guide_remote_body,
+            R.string.guide_warn_title to R.string.guide_warn_body
+        )
+        val density = context.resources.displayMetrics.density
+        val content = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (20 * density).toInt()
+            setPadding(pad, pad, pad, 0)
+        }
+        sections.forEach { (titleRes, bodyRes) ->
+            content.addView(android.widget.TextView(context).apply {
+                setText(titleRes)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17f)
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setPadding(0, (14 * density).toInt(), 0, (4 * density).toInt())
+            })
+            content.addView(android.widget.TextView(context).apply {
+                setText(bodyRes)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+            })
+        }
+        val scroll = android.widget.ScrollView(context).apply { addView(content) }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.guide_title)
+            .setView(scroll)
+            .setPositiveButton(R.string.guide_close, null)
+            .show()
+    }
 
     private fun setupTeamNameFields() {
         val hint = context.getString(
