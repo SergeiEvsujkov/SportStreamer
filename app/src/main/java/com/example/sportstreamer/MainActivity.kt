@@ -94,6 +94,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Подняты ли сейчас два энкодера: эфирный 720p и записывающий 1080p. */
     private var dualEncodersActive = false
 
+    /** GL переведён в фоновый режим (работает без SurfaceView), пока сессия продолжается. */
+    private var backgroundGl = false
+
     /** Номер сессии открытия настроек: отсекает устаревшие запросы ориентации. */
     private var settingsSession = 0
 
@@ -268,6 +271,26 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         super.onResume()
         if (!::binding.isInitialized) return
 
+        // Возвращаемся из фона во время сессии: подключаем GL обратно к SurfaceView.
+        if (backgroundGl) {
+            backgroundGl = false
+            val camera = rtmpCamera2
+            if (camera != null) {
+                try {
+                    camera.replaceView(binding.openGlView)
+                    overlay?.invalidate()
+                    attachOverlayWhenGlReady()
+                    applyZoom()
+                    applyVideoStabilization()
+                    applyExposure()
+                    Log.i(TAG, "Возврат из фона: GL снова на экране")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Не удалось вернуть GL на экран — останавливаемся", e)
+                    stopEverything(showToasts = true)
+                }
+            }
+        }
+
         settings = SettingsRepository.load(this)
         if (!settings.isConfigured) {
             if (!awaitingSettings) {
@@ -307,6 +330,20 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     override fun onPause() {
         super.onPause()
+        // Если идёт эфир или запись — не останавливаемся: библиотека умеет работать без
+        // SurfaceView, поэтому переводим GL в фоновый режим и продолжаем сессию.
+        val camera = rtmpCamera2
+        if (camera != null && (camera.isStreaming || isRecordingNow)) {
+            try {
+                camera.replaceView(applicationContext)
+                backgroundGl = true
+                Log.i(TAG, "Свёрнуто во время сессии: GL переведён в фоновый режим")
+            } catch (e: Exception) {
+                Log.e(TAG, "Не удалось уйти в фоновый GL — останавливаемся", e)
+                stopEverything(showToasts = true)
+            }
+            return
+        }
         stopEverything(showToasts = true)
     }
 
