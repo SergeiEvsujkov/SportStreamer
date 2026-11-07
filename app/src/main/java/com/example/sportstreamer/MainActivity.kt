@@ -460,8 +460,22 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Ребёнок будет больше окна по высоте и повёрнут — обрезать его нельзя.
         binding.settingsHost.clipChildren = false
         binding.settingsHost.clipToPadding = false
-        binding.settingsHost.addView(
+
+        // Смахивание закрывает настройки. Контейнер стоит снаружи повёрнутой панели,
+        // поэтому его оси совпадают с тем, что видит пользователь: горизонтальный жест —
+        // закрытие, вертикальный — прокрутка списка настроек.
+        val swipeContainer = SwipeDismissFrameLayout(this).apply {
+            onDismiss = { hideSettingsPanel() }
+        }
+        swipeContainer.addView(
             panelBinding.root,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        binding.settingsHost.addView(
+            swipeContainer,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -471,9 +485,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // окна нельзя: это пересоздало бы поверхность превью и прервало запись. Поэтому
         // панель раскладывается как портретный экран (высота окна × ширина окна) и
         // поворачивается на 90°: телефон держат вертикально, и содержимое читается нормально.
-        applyPortraitLayout(binding.settingsHost, panelBinding.root)
+        applyPortraitLayout(binding.settingsHost, swipeContainer)
         binding.settingsHost.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            applyPortraitLayout(binding.settingsHost, panelBinding.root)
+            applyPortraitLayout(binding.settingsHost, swipeContainer)
         }
         // Панель занимает весь экран, поэтому отступы системных панелей добавляем сами.
         ViewCompat.setOnApplyWindowInsetsListener(panelBinding.root) { view, insets ->
