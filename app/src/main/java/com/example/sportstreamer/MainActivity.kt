@@ -971,6 +971,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // surfaceCreated: он вызовет этот же метод, когда поверхность будет готова.
         if (binding.openGlView.holder.surface?.isValid != true) return
         try {
+            // startPreview() поднимает новый GL-контекст: фильтры оверлея в нём отсутствуют,
+            // а признак «подключён» остался с прошлого раза. Без сброса attach() ничего не добавит.
+            overlay?.invalidate()
             camera.startPreview()
             previewRunning = true
             applyZoom()   // камера открылась заново — возвращаем прежний зум
@@ -1035,7 +1038,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private fun refreshPreviewAfterPrepare(camera: RtmpCamera2) {
         previewRunning = camera.isOnPreview
         if (previewRunning) {
-            // Превью живо — надписи уже подключены, достаточно обновить текст.
+            // prepareVideo() пересобирает GL: фильтры потеряны, признак подключения — нет.
+            overlay?.invalidate()
             refreshOverlay()
         } else {
             ensurePreview(camera)
@@ -1442,7 +1446,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             return
         }
 
-        // startStream() пересобирает GL под энкодеры — возвращаем надписи без мигания.
+        // startStream() пересобирает GL под энкодеры — возвращаем надписи без мигания,
+        // но сначала сбрасываем кэш: старые фильтры остались в прежнем GL-контексте.
+        overlay?.invalidate()
         refreshOverlay()
 
         // Если запись шла до старта эфира — продолжаем её новой частью (старая закрыта выше).
