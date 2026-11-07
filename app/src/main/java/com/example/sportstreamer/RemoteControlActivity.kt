@@ -18,6 +18,9 @@ class RemoteControlActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityRemoteBinding
     private var client: RemoteScoreClient? = null
+    /** Открытый диалог завершения партии: закрывается, когда решение принято с любой стороны. */
+    private var stateDialog: androidx.appcompat.app.AlertDialog? = null
+    private var lastSetPending = false
 
     /** Сканирование QR: код содержит адрес, порт и PIN источника. */
     private val scanLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -95,9 +98,54 @@ class RemoteControlActivity : AppCompatActivity() {
                 binding.tvStatus.text = reason ?: getString(R.string.remote_client_status_disconnected)
                 updateButtons(enabled = false)
             }
+
+            override fun onState(
+                team1Score: Int,
+                team2Score: Int,
+                team1Sets: Int,
+                team2Sets: Int,
+                game: Int,
+                setPending: Boolean,
+                matchOver: Boolean
+            ) {
+                binding.tvStatus.text = getString(
+                    R.string.remote_client_score,
+                    team1Sets,
+                    team2Sets,
+                    team1Score,
+                    team2Score,
+                    game
+                )
+                if (setPending && !lastSetPending) {
+                    showSetDecision()
+                }
+                if (!setPending) {
+                    stateDialog?.dismiss()
+                    stateDialog = null
+                }
+                lastSetPending = setPending
+                updateButtons(enabled = !setPending && !matchOver)
+            }
         })
         client = newClient
         newClient.connect()
+    }
+
+    /** Партия завершена: пульт предлагает то же решение, что и диалог на источнике. */
+    private fun showSetDecision() {
+        stateDialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.remote_client_set_title)
+            .setMessage(R.string.remote_client_set_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.remote_client_set_new) { _, _ ->
+                client?.sendSetDecision(true)
+                stateDialog = null
+            }
+            .setNegativeButton(R.string.remote_client_set_continue) { _, _ ->
+                client?.sendSetDecision(false)
+                stateDialog = null
+            }
+            .show()
     }
 
     private fun sendPoint(team: Int, add: Boolean) {
@@ -127,6 +175,8 @@ class RemoteControlActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        stateDialog?.dismiss()
+        stateDialog = null
         client?.disconnect(null)
         client = null
         super.onDestroy()

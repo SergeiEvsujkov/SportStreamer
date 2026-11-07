@@ -617,6 +617,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
     }
 
+    /** Открытый диалог завершения партии: его может закрыть и пульт. */
+    private var setFinishedDialog: androidx.appcompat.app.AlertDialog? = null
+    private var pendingSetWinner: ScoreEngine.Team? = null
+
     /** Сервер удалённого пульта: работает, пока открыт диалог сопряжения. */
     private var remoteServer: RemoteScoreServer? = null
 
@@ -639,6 +643,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
             override fun onUndo() {
                 Log.i(TAG, "Пульт: отмена не поддерживается и игнорируется")
+            }
+
+            override fun onSetDecision(newSet: Boolean) {
+                applyRemoteSetDecision(newSet)
             }
 
             override fun onClientConnected() {
@@ -899,7 +907,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     private fun showSetFinishedDialog(winner: ScoreEngine.Team) {
-        MaterialAlertDialogBuilder(this)
+        pendingSetWinner = winner
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.main_set_finished_title)
             .setMessage(
                 getString(
@@ -911,13 +920,22 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             .setCancelable(false)
             .setPositiveButton(R.string.main_set_finished_positive) { _, _ ->
                 engine.startNewSet(winner)
+                pendingSetWinner = null
+                setFinishedDialog = null
                 onMatchChanged()
             }
-            .setNegativeButton(R.string.main_set_finished_negative) { dialog, _ ->
+            .setNegativeButton(R.string.main_set_finished_negative) { dialogView, _ ->
                 engine.declineSetCompletion()
-                dialog.dismiss()
+                pendingSetWinner = null
+                setFinishedDialog = null
+                dialogView.dismiss()
+                onMatchChanged()
             }
-            .show()
+            .create()
+        setFinishedDialog = dialog
+        dialog.show()
+        // Пульт видит, что партия завершена и ждёт решения — и может принять его сам.
+        broadcastRemoteState()
     }
 
     private fun showMatchFinishedDialog(winner: ScoreEngine.Team) {
@@ -943,11 +961,42 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             .show()
     }
 
+    /** Отправляет пульту текущее состояние: счёт, партии, ожидание решения по партии. */
+    private fun broadcastRemoteState() {
+        val server = remoteServer ?: return
+        server.sendToClient(
+            RemoteScoreProtocol.state(
+                team1Score = engine.team1Score,
+                team2Score = engine.team2Score,
+                team1Sets = engine.team1Sets,
+                team2Sets = engine.team2Sets,
+                game = engine.team1Sets + engine.team2Sets + 1,
+                setPending = setFinishedDialog != null,
+                matchOver = engine.isMatchOver
+            )
+        )
+    }
+
+    /** Решение по партии, пришедшее с пульта: применяем как нажатие в диалоге. */
+    private fun applyRemoteSetDecision(newSet: Boolean) {
+        val winner = pendingSetWinner ?: return
+        if (newSet) {
+            engine.startNewSet(winner)
+        } else {
+            engine.declineSetCompletion()
+        }
+        pendingSetWinner = null
+        setFinishedDialog?.dismiss()
+        setFinishedDialog = null
+        onMatchChanged()
+    }
+
     private fun onMatchChanged() {
         // Меняем только надписи: геометрия оверлея задаётся один раз в attach()
         // (RootEncoder сдвигает спрайт при повторном setPosition/setScale).
         overlay?.updateTexts(overlayState())
         updateUi()
+        broadcastRemoteState()
     }
 
     private fun overlayState(): ScoreOverlay.State = ScoreOverlay.State(

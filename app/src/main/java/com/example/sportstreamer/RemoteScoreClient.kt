@@ -27,6 +27,7 @@ class RemoteScoreClient(
     interface Listener {
         fun onConnected()
         fun onDisconnected(reason: String?)
+        fun onState(team1Score: Int, team2Score: Int, team1Sets: Int, team2Sets: Int, game: Int, setPending: Boolean, matchOver: Boolean)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -75,9 +76,20 @@ class RemoteScoreClient(
                     }
                 }
                 main.postDelayed(ping, PING_INTERVAL_MS)
-                // Держим соединение: читаем ответы, пока сервер не закроет сокет.
+                // Держим соединение и принимаем состояние матча.
                 while (running) {
-                    if (reader.readLine() == null) break
+                    val line = reader.readLine() ?: break
+                    val message = runCatching { JSONObject(line) }.getOrNull() ?: continue
+                    if (message.optString(RemoteScoreProtocol.FIELD_CMD) == RemoteScoreProtocol.CMD_STATE) {
+                        val t1 = message.optInt(RemoteScoreProtocol.FIELD_T1)
+                        val t2 = message.optInt(RemoteScoreProtocol.FIELD_T2)
+                        val s1 = message.optInt(RemoteScoreProtocol.FIELD_S1)
+                        val s2 = message.optInt(RemoteScoreProtocol.FIELD_S2)
+                        val game = message.optInt(RemoteScoreProtocol.FIELD_GAME)
+                        val pending = message.optBoolean(RemoteScoreProtocol.FIELD_SET_PENDING)
+                        val over = message.optBoolean(RemoteScoreProtocol.FIELD_MATCH_OVER)
+                        main.post { listener.onState(t1, t2, s1, s2, game, pending, over) }
+                    }
                 }
                 disconnect(null)
             } catch (e: Exception) {
@@ -89,6 +101,9 @@ class RemoteScoreClient(
 
     /** Отправляет команду начисления или снятия очка. */
     fun sendPoint(team: Int, add: Boolean) = send(RemoteScoreProtocol.point(team, add))
+
+    /** Решение по завершённой партии: начать новую или продолжить текущую. */
+    fun sendSetDecision(newSet: Boolean) = send(RemoteScoreProtocol.setDecision(newSet))
 
     private fun send(command: String) {
         try {

@@ -27,6 +27,7 @@ class RemoteScoreServer(
     interface Listener {
         fun onPoint(team: Int, add: Boolean)
         fun onUndo()
+        fun onSetDecision(newSet: Boolean)
         fun onClientConnected()
         fun onClientDisconnected()
     }
@@ -35,6 +36,7 @@ class RemoteScoreServer(
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private var serverSocket: ServerSocket? = null
     private var client: Socket? = null
+    private var clientWriter: OutputStreamWriter? = null
     @Volatile
     private var running = false
 
@@ -87,6 +89,7 @@ class RemoteScoreServer(
             writer.write(RemoteScoreProtocol.response(true) + "\n")
             writer.flush()
             client = socket
+            clientWriter = writer
             main.post { listener.onClientConnected() }
             Log.i(TAG, "Пульт подключён")
 
@@ -106,6 +109,11 @@ class RemoteScoreServer(
 
                     // Heartbeat: отвечаем сразу, чтобы пульт видел живое соединение
                     // и Wi-Fi не уходил в энергосбережение.
+                    RemoteScoreProtocol.CMD_SET_DECISION -> {
+                        val newSet = message.optBoolean(RemoteScoreProtocol.FIELD_NEW_SET, false)
+                        main.post { listener.onSetDecision(newSet) }
+                    }
+
                     RemoteScoreProtocol.CMD_PING -> {
                         writer.write(RemoteScoreProtocol.response(true) + "\n")
                         writer.flush()
@@ -120,7 +128,20 @@ class RemoteScoreServer(
             } catch (_: Exception) {
             }
             client = null
+            clientWriter = null
             main.post { listener.onClientDisconnected() }
+        }
+    }
+
+    /** Отправляет строку подключённому пульту; если пульта нет — молча игнорирует. */
+    fun sendToClient(line: String) {
+        try {
+            clientWriter?.apply {
+                write(line + "\n")
+                flush()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Не удалось отправить данные пульту", e)
         }
     }
 
