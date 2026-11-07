@@ -194,9 +194,10 @@ class RemoteWebServer(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>SportStreamer — пульт</title>
 <style>
-  :root { color-scheme: light dark; }
+  :root { color-scheme: light; }
   body { margin:0; font-family: system-ui, sans-serif; background:#f2f0f7; color:#1c1b1f; }
   header { padding:16px; text-align:center; font-size:20px; color:#6750a4; }
   #score { text-align:center; font-size:22px; padding:8px 0 4px; }
