@@ -27,7 +27,7 @@ class RemoteScoreClient(
     interface Listener {
         fun onConnected()
         fun onDisconnected(reason: String?)
-        fun onState(team1Score: Int, team2Score: Int, team1Sets: Int, team2Sets: Int, game: Int, setPending: Boolean, matchOver: Boolean)
+        fun onState(team1Score: Int, team2Score: Int, team1Sets: Int, team2Sets: Int, game: Int, setPending: Boolean, matchOver: Boolean, setsToWin: Int)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -88,7 +88,8 @@ class RemoteScoreClient(
                         val game = message.optInt(RemoteScoreProtocol.FIELD_GAME)
                         val pending = message.optBoolean(RemoteScoreProtocol.FIELD_SET_PENDING)
                         val over = message.optBoolean(RemoteScoreProtocol.FIELD_MATCH_OVER)
-                        main.post { listener.onState(t1, t2, s1, s2, game, pending, over) }
+                        val setsToWin = message.optInt(RemoteScoreProtocol.FIELD_SETS_TO_WIN, 2)
+                        main.post { listener.onState(t1, t2, s1, s2, game, pending, over, setsToWin) }
                     }
                 }
                 disconnect(null)

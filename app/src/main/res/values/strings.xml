@@ -196,7 +196,7 @@
     <string name="remote_client_not_connected">Сначала подключитесь к источнику</string>
     <string name="remote_client_team1">Команда 1</string>
     <string name="remote_client_team2">Команда 2</string>
-    <string name="remote_client_score">Партии %1$d:%2$d · счёт %3$d:%4$d · партия %5$d</string>
+    <string name="remote_client_score">Партии %1$d:%2$d · счёт %3$d:%4$d · партия %5$d из %6$d</string>
     <string name="remote_client_set_title">Партия завершена</string>
     <string name="remote_client_set_message">Начать новую партию или продолжить текущую?</string>
     <string name="remote_client_set_new">Новая партия</string>

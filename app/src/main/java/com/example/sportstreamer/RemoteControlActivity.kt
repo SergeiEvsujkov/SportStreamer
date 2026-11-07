@@ -106,15 +106,19 @@ class RemoteControlActivity : AppCompatActivity() {
                 team2Sets: Int,
                 game: Int,
                 setPending: Boolean,
-                matchOver: Boolean
+                matchOver: Boolean,
+                setsToWin: Int
             ) {
+                // Всего партий в матче: до 2 побед — 3 партии, до 3 побед — 5.
+                val totalGames = setsToWin * 2 - 1
                 binding.tvStatus.text = getString(
                     R.string.remote_client_score,
                     team1Sets,
                     team2Sets,
                     team1Score,
                     team2Score,
-                    game
+                    game,
+                    totalGames
                 )
                 if (setPending && !lastSetPending) {
                     showSetDecision()

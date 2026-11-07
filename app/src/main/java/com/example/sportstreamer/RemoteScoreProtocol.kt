@@ -34,6 +34,7 @@ object RemoteScoreProtocol {
     const val FIELD_GAME = "game"
     const val FIELD_SET_PENDING = "setPending"
     const val FIELD_MATCH_OVER = "matchOver"
+    const val FIELD_SETS_TO_WIN = "setsToWin"
     const val FIELD_NEW_SET = "newSet"
 
     /** Команда «дай очко»: team = 1 или 2, add = true — прибавить, false — убрать. */
@@ -57,7 +58,8 @@ object RemoteScoreProtocol {
         team2Sets: Int,
         game: Int,
         setPending: Boolean,
-        matchOver: Boolean
+        matchOver: Boolean,
+        setsToWin: Int
     ): String = JSONObject()
         .put(FIELD_CMD, CMD_STATE)
         .put(FIELD_T1, team1Score)
@@ -67,6 +69,7 @@ object RemoteScoreProtocol {
         .put(FIELD_GAME, game)
         .put(FIELD_SET_PENDING, setPending)
         .put(FIELD_MATCH_OVER, matchOver)
+        .put(FIELD_SETS_TO_WIN, setsToWin)
         .toString()
 
     /** Решение по завершённой партии: начать новую или продолжить текущую. */
