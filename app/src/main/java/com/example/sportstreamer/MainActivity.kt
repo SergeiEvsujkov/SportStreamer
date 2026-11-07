@@ -1358,9 +1358,44 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         recordingPart = 0
         // Без эфира stopRecord() внутри библиотеки вызывает stopStream() — полный teardown:
-        // GL остановлен, камера закрыта. Возвращаем превью и оверлей без лишней паузы.
-        if (rtmpCamera2?.isStreaming != true) restorePreviewSoon()
+        // GL остановлен, камера закрыта. Поднимаем превью детерминированно, а не серией
+        // отложенных попыток: они выставляли previewRunning, хотя GL ещё не отрисовал кадр.
+        if (rtmpCamera2?.isStreaming != true) restartPreviewAfterTeardown()
         updateUi()
+    }
+
+    /**
+     * Поднимает превью после teardown, который библиотека делает при остановке записи
+     * без эфира.
+     *
+     * Прошлый вариант оставлял чёрный экран: первый отложенный вызов успевал выставить
+     * `previewRunning = true`, хотя GL ещё не запустился, и все следующие попытки выходили
+     * сразу. Здесь состояние сбрасывается заранее, запуск один, и результат проверяется.
+     */
+    private fun restartPreviewAfterTeardown() {
+        previewRunning = false
+        handler.postDelayed({
+            if (isFinishing || isDestroyed) return@postDelayed
+            val camera = rtmpCamera2 ?: return@postDelayed
+            try {
+                camera.stopPreview()
+            } catch (e: Exception) {
+                Log.w(TAG, "Не удалось сбросить превью перед перезапуском", e)
+            }
+            ensurePreview(camera)
+            attachOverlayWhenGlReady()
+            // Страховка: если GL не поднялся за секунду, повторяем ровно один раз.
+            handler.postDelayed({
+                if (isFinishing || isDestroyed) return@postDelayed
+                val cam = rtmpCamera2 ?: return@postDelayed
+                if (!cam.glInterface.isRunning) {
+                    Log.w(TAG, "GL не поднялся после остановки записи — повторяю запуск превью")
+                    previewRunning = false
+                    ensurePreview(cam)
+                    attachOverlayWhenGlReady()
+                }
+            }, 1200L)
+        }, 400L)
     }
 
     private fun startBroadcast() {
