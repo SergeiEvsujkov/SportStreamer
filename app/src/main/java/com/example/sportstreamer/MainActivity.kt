@@ -653,6 +653,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 applyRemoteSetDecision(newSet)
             }
 
+            override fun onSyncRequested() {
+                broadcastRemoteState()
+            }
+
             override fun onClientConnected() {
                 toast(getString(R.string.remote_connected))
                 // Пульт мог подключиться к идущему матчу: сразу отдаём текущий счёт.
@@ -942,6 +946,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             }
             .create()
         setFinishedDialog = dialog
+        // Диалог мог закрыться и без кнопок (пересоздание активити): без этой очистки
+        // признак «партия завершена» навсегда уходил пульту, и кнопки там блокировались.
+        dialog.setOnDismissListener {
+            setFinishedDialog = null
+            pendingSetWinner = null
+            broadcastRemoteState()
+        }
         dialog.show()
         // Пульт видит, что партия завершена и ждёт решения — и может принять его сам.
         broadcastRemoteState()

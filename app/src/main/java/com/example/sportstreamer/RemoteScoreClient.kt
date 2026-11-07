@@ -67,11 +67,16 @@ class RemoteScoreClient(
 
                 Log.i(TAG, "подключено к $host:$port")
                 main.post { listener.onConnected() }
+                // Первый запрос сразу после рукопожатия.
+                send(RemoteScoreProtocol.sync())
                 // Heartbeat: раз в 5 секунд, чтобы соединение не считалось простаивающим.
                 val ping = object : Runnable {
                     override fun run() {
                         if (running) {
                             send(RemoteScoreProtocol.ping())
+                            // Пока состояние не пришло, настойчиво просим его снова:
+                            // один потерянный пакет не должен оставлять пульт без счёта.
+                            send(RemoteScoreProtocol.sync())
                             main.postDelayed(this, PING_INTERVAL_MS)
                         }
                     }

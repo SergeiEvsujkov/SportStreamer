@@ -28,6 +28,7 @@ class RemoteScoreServer(
         fun onPoint(team: Int, add: Boolean)
         fun onUndo()
         fun onSetDecision(newSet: Boolean)
+        fun onSyncRequested()
         fun onClientConnected()
         fun onClientDisconnected()
     }
@@ -120,6 +121,8 @@ class RemoteScoreServer(
                         val newSet = message.optBoolean(RemoteScoreProtocol.FIELD_NEW_SET, false)
                         main.post { listener.onSetDecision(newSet) }
                     }
+
+                    RemoteScoreProtocol.CMD_SYNC -> main.post { listener.onSyncRequested() }
 
                     RemoteScoreProtocol.CMD_PING -> {
                         writer.write(RemoteScoreProtocol.response(true) + "\n")

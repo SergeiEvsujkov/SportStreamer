@@ -139,7 +139,7 @@ class RemoteControlActivity : AppCompatActivity() {
                 if (team2Name.isNotBlank()) binding.tvTeam2Name.text = team2Name
                 // Всего партий в матче: до 2 побед — 3 партии, до 3 побед — 5.
                 val totalGames = setsToWin * 2 - 1
-                binding.tvStatus.text = getString(
+                binding.tvScore.text = getString(
                     R.string.remote_client_score,
                     team1Sets,
                     team2Sets,

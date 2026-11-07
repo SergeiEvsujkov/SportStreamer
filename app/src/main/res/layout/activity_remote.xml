@@ -94,6 +94,15 @@
     </LinearLayout>
 
     <TextView
+        android:id="@+id/tvScore"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="@string/remote_client_score_empty"
+        android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+
+    <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

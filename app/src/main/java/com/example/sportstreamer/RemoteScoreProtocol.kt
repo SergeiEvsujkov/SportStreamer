@@ -19,6 +19,7 @@ object RemoteScoreProtocol {
     const val CMD_UNDO = "undo"
     const val CMD_PING = "ping"
     const val CMD_STATE = "state"
+    const val CMD_SYNC = "sync"
     const val CMD_SET_DECISION = "setDecision"
 
     const val FIELD_CMD = "cmd"
@@ -51,6 +52,9 @@ object RemoteScoreProtocol {
 
     /** Проверка живости соединения: без трафика Wi-Fi усыпляет сокет. */
     fun ping(): String = JSONObject().put(FIELD_CMD, CMD_PING).toString()
+
+    /** Пульт просит текущее состояние: не полагаемся на то, что источник пришлёт его сам. */
+    fun sync(): String = JSONObject().put(FIELD_CMD, CMD_SYNC).toString()
 
     /** Состояние матча, которое источник рассылает пульту после каждого изменения. */
     fun state(
