@@ -654,49 +654,69 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             getString(R.string.remote_dialog_message, "$address:${RemoteScoreProtocol.PORT}", pin)
         }
 
-        // QR содержит адрес, порт и код: второму телефону достаточно его отсканировать.
+        // Содержимое диалога: QR фиксированного размера, крупный адрес, код и две кнопки.
+        // Раньше QR растягивался и вытеснял текст с кнопками за пределы окна.
+        val density = resources.displayMetrics.density
         val container = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            val pad = (20 * resources.displayMetrics.density).toInt()
+            val pad = (16 * density).toInt()
             setPadding(pad, pad, pad, 0)
         }
-        if (address != null) {
-            val payload = "sportstreamer://remote?address=$address:${RemoteScoreProtocol.PORT}&pin=$pin"
-            generateQrCode(payload)?.let { bitmap ->
-                val qrView = android.widget.ImageView(this).apply { setImageBitmap(bitmap) }
-                remoteQrView = qrView
-                container.addView(
-                    qrView,
-                    android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                    )
-                )
+
+        val qrSize = (180 * density).toInt()
+        val qrView = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            layoutParams = android.widget.LinearLayout.LayoutParams(qrSize, qrSize).apply {
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
             }
         }
+        remoteQrView = qrView
+        if (address != null) {
+            generateQrCode(buildRemoteQrPayload(address))?.let { qrView.setImageBitmap(it) }
+        }
+        container.addView(qrView)
+
         container.addView(android.widget.TextView(this).apply {
-            text = message
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            setPadding(0, pad, 0, 0)
+            text = getString(
+                R.string.remote_address_line,
+                address?.let { "$it:${RemoteScoreProtocol.PORT}" } ?: "—"
+            )
+            textSize = 18f
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding(0, (12 * density).toInt(), 0, 0)
+        })
+        container.addView(android.widget.TextView(this).apply {
+            text = getString(R.string.remote_pin_line, pin)
+            textSize = 26f
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding(0, (8 * density).toInt(), 0, (12 * density).toInt())
         })
 
-        // Кнопка поднимает локальную точку доступа: второй телефон подключается к ней
-        // и сканирует обновлённый QR — пароль вводить не нужно.
-        container.addView(com.google.android.material.button.MaterialButton(this).apply {
+        val buttons = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+        }
+        buttons.addView(com.google.android.material.button.MaterialButton(
+            this,
+            null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle
+        ).apply {
             text = getString(R.string.remote_hotspot_start)
             setOnClickListener { startHotspot(address) }
-        }, android.widget.LinearLayout.LayoutParams(
-            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (12 * resources.displayMetrics.density).toInt() })
+        }, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        buttons.addView(com.google.android.material.button.MaterialButton(this).apply {
+            text = getString(R.string.remote_client_short)
+            setOnClickListener {
+                startActivity(android.content.Intent(this@MainActivity, RemoteControlActivity::class.java))
+            }
+        }, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = (8 * density).toInt()
+        })
+        container.addView(buttons)
 
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.remote_dialog_title)
-            .setView(container)
+            .setView(android.widget.ScrollView(this).apply { addView(container) })
             .setPositiveButton(android.R.string.ok, null)
-            .setNeutralButton(R.string.remote_button_client) { _, _ ->
-                startActivity(android.content.Intent(this, RemoteControlActivity::class.java))
-            }
             .setOnDismissListener {
                 remoteServer?.stop()
                 remoteServer = null
