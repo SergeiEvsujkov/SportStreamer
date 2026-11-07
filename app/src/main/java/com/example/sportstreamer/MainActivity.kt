@@ -707,6 +707,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             ).also { it.start() }
         }
 
+        // Адрес страницы для проверки в браузере: пишем в лог, чтобы его можно было
+        // открыть снаружи, не сканируя QR.
+        if (address != null) {
+            Log.i(TAG, "веб-пульт: http://$address:${RemoteWebServer.PORT}/?t=$pin")
+        }
+
         val message = if (address == null) {
             getString(R.string.remote_no_address, pin)
         } else {
