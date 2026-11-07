@@ -760,8 +760,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         remoteQrView = qrView
         if (shownAddress != null) {
             generateQrCode(buildRemoteQrPayload(shownAddress))?.let { qrView.setImageBitmap(it) }
+            container.addView(qrView)
         }
-        container.addView(qrView)
 
         val right = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -775,8 +775,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         val addressView = android.widget.TextView(this).apply {
             text = when {
-                // Без сети вместо пустого адреса сразу говорим, что нужно сделать.
-                shownAddress == null -> getString(R.string.remote_no_network_hint)
+                // Без сети вместо адреса и кода — понятная инструкция со способами.
+                shownAddress == null -> getString(R.string.remote_need_network)
                 apAddress != null -> getString(
                     R.string.remote_hotspot_address,
                     "$apAddress:${RemoteWebServer.PORT}"
@@ -790,11 +790,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         remoteAddressView = addressView
         right.addView(addressView)
-        right.addView(android.widget.TextView(this).apply {
-            text = getString(R.string.remote_pin_line, pin)
-            textSize = 26f
-            setPadding(0, (4 * density).toInt(), 0, (12 * density).toInt())
-        })
+        // Код сопряжения без сети бесполезен — не засоряем окно.
+        if (shownAddress != null) {
+            right.addView(android.widget.TextView(this).apply {
+                text = getString(R.string.remote_pin_line, pin)
+                textSize = 26f
+                setPadding(0, (4 * density).toInt(), 0, (12 * density).toInt())
+            })
+        }
 
         // Сеть и пароль точки доступа: без них второй телефон не к чему подключать.
         val networkView = android.widget.TextView(this).apply {

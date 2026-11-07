@@ -212,7 +212,7 @@
     <string name="remote_wifi_address">Общий Wi-Fi: %1$s</string>
     <string name="remote_no_network">Нет сети</string>
     <string name="remote_hotspot_hint">Второй телефон подключите к вашей точке доступа и отсканируйте QR</string>
-    <string name="remote_no_network_hint">Пульту нужна сеть. Включите точку доступа в настройках Android или подключите телефон к Wi-Fi и откройте это окно снова</string>
+    <string name="remote_need_network">Чтобы управлять счётом с другого устройства, нужна сеть.\n\nСпособы (выберите любой):\n1. Подключиться к сети Wi-Fi.\n2. Включить точку доступа Wi-Fi на смартфоне.</string>
     <string name="remote_address_line">Адрес: %1$s</string>
     <string name="remote_pin_line">Код: %1$s</string>
     <string name="remote_client_short">Я пульт</string>
