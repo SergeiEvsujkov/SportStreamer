@@ -55,6 +55,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private lateinit var engine: ScoreEngine
     private lateinit var bitrateAdapter: BitrateAdapter
 
+    /** Фактический битрейт эфира в кбит/с: его показывает пульт. */
+    private var currentBitrateKbps: Int = 0
+
     private var rtmpCamera2: RtmpCamera2? = null
     private var overlay: ScoreOverlay? = null
     private var recorder: VideoRecorder? = null
@@ -701,7 +704,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                         team1Name = settings.team1Name,
                         team2Name = settings.team2Name,
                         sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
-                        recording = isRecordingNow
+                        recording = isRecordingNow,
+                        bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0
                     )
                 },
                 pointHandler = { team, add ->
@@ -1102,7 +1106,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 team1Name = settings.team1Name,
                 team2Name = settings.team2Name,
                 sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
-                recording = isRecordingNow
+                recording = isRecordingNow,
+                bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0
             )
         )
     }
@@ -2124,6 +2129,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     private fun updateBitrateStats(camera: RtmpCamera2) {
         val stats = bitrateAdapter.onStats(SystemClock.elapsedRealtime(), safeBytesSent(camera)) ?: return
+        currentBitrateKbps = stats.actualBitrate / 1000
 
         binding.bitrate.text = getString(
             R.string.main_bitrate_stats,

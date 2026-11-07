@@ -175,7 +175,8 @@ class RemoteWebServer(
   :root { color-scheme: light dark; }
   body { margin:0; font-family: system-ui, sans-serif; background:#f2f0f7; color:#1c1b1f; }
   header { padding:16px; text-align:center; font-size:20px; color:#6750a4; }
-  #score { text-align:center; font-size:22px; padding:8px 0 16px; }
+  #score { text-align:center; font-size:22px; padding:8px 0 4px; }
+  #bitrate { text-align:center; font-size:16px; color:#555; padding:0 0 12px; }
   .teams { display:flex; gap:12px; padding:0 16px 24px; }
   .team { flex:1; background:#fff; border-radius:20px; padding:16px; text-align:center;
           box-shadow:0 2px 8px rgba(0,0,0,.08); }
@@ -189,6 +190,7 @@ class RemoteWebServer(
 <body>
 <header>SportStreamer — пульт</header>
 <div id="score">загрузка…</div>
+<div id="bitrate">битрейт: —</div>
 <div class="teams">
   <div class="team">
     <div class="name" id="n1">Команда 1</div>
@@ -240,6 +242,9 @@ async function tick() {
     const r = await fetch('/state?t=' + encodeURIComponent(t), {cache:'no-store'});
     const s = await r.json();
     window.s = s;
+    el('bitrate').textContent = s.bitrateKbps > 0
+        ? 'битрейт: ' + (s.bitrateKbps / 1000).toFixed(2) + ' Мбит/с'
+        : 'битрейт: —';
     el('n1').textContent = s.team1Name || 'Команда 1';
     el('n2').textContent = s.team2Name || 'Команда 2';
     el('score').textContent = 'Партии ' + s.s1 + ':' + s.s2 +
@@ -257,7 +262,7 @@ async function tick() {
       el('status').textContent = 'матч завершён — решите здесь или на телефоне';
     } else {
       d.innerHTML = '';
-      el('status').textContent = s.matchOver ? 'матч завершён' : 'связь есть';
+        el('status').textContent = s.matchOver ? 'матч завершён' : 'связь есть';
     }
   } catch (e) { el('status').textContent = 'нет связи с источником'; }
 }
