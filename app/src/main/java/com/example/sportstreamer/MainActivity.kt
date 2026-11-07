@@ -634,7 +634,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      * Пока диалог открыт, сервер слушает порт; при закрытии — останавливается.
      */
     private fun showRemoteDialog() {
-        if (remoteServer != null) return
+        // Сервер живёт до закрытия приложения, поэтому второй вызов — это повторный показ
+        // адреса и кода на том же сервере. Раньше здесь стоял `return`, и после первого
+        // закрытия окна кнопка пульта переставала открывать диалог.
         // Сервер живёт до destroy: закрытие диалога не должно рвать связь с пультом.
         val alreadyRunning = remoteServer != null
         val pin = if (alreadyRunning && remotePin.isNotEmpty()) remotePin else RemoteScoreProtocol.generatePin()
