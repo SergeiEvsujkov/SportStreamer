@@ -21,6 +21,9 @@ class RemoteControlActivity : AppCompatActivity() {
     /** Открытый диалог завершения партии: закрывается, когда решение принято с любой стороны. */
     private var stateDialog: androidx.appcompat.app.AlertDialog? = null
     private var lastSetPending = false
+    private val reconnectHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var reconnectAttempts = 0
+    private var userClosed = false
 
     /** Сканирование QR: код содержит адрес, порт и PIN источника. */
     private val scanLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -47,6 +50,9 @@ class RemoteControlActivity : AppCompatActivity() {
         updateButtons(enabled = false)
     }
 
+    private var connectAddress = ""
+    private var connectPin = ""
+
     private fun scanQr() {
         val options = ScanOptions().apply {
             setDesiredBarcodeFormats(ScanOptions.QR_CODE)
@@ -71,11 +77,11 @@ class RemoteControlActivity : AppCompatActivity() {
         connect()
     }
 
-    private fun connect() {
-        val address = binding.etAddress.text?.toString()?.trim().orEmpty()
-        val pin = binding.etPin.text?.toString()?.trim().orEmpty()
+    private fun connect(silent: Boolean = false) {
+        val address = if (silent) connectAddress else binding.etAddress.text?.toString()?.trim().orEmpty()
+        val pin = if (silent) connectPin else binding.etPin.text?.toString()?.trim().orEmpty()
         if (address.isEmpty() || pin.length != 4) {
-            toast(getString(R.string.remote_client_fill_fields))
+            if (!silent) toast(getString(R.string.remote_client_fill_fields))
             return
         }
         val separator = address.lastIndexOf(':')
@@ -87,9 +93,12 @@ class RemoteControlActivity : AppCompatActivity() {
         }
 
         client?.disconnect(null)
+        if (!silent) connectAddress = address
+        if (!silent) connectPin = pin
         binding.tvStatus.text = getString(R.string.remote_client_status_connecting)
         val newClient = RemoteScoreClient(host, port, pin, object : RemoteScoreClient.Listener {
             override fun onConnected() {
+                reconnectAttempts = 0
                 binding.tvStatus.text = getString(R.string.remote_client_status_connected)
                 updateButtons(enabled = true)
             }
@@ -97,6 +106,11 @@ class RemoteControlActivity : AppCompatActivity() {
             override fun onDisconnected(reason: String?) {
                 binding.tvStatus.text = reason ?: getString(R.string.remote_client_status_disconnected)
                 updateButtons(enabled = false)
+                // Сами не отключались — пробуем подняться заново: на площадке связь моргает.
+                if (!userClosed && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++
+                    reconnectHandler.postDelayed({ if (!userClosed) connect(silent = true) }, RECONNECT_DELAY_MS)
+                }
             }
 
             override fun onState(
@@ -179,11 +193,18 @@ class RemoteControlActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        userClosed = true
+        reconnectHandler.removeCallbacksAndMessages(null)
         stateDialog?.dismiss()
         stateDialog = null
         client?.disconnect(null)
         client = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val RECONNECT_DELAY_MS = 2000L
+        const val MAX_RECONNECT_ATTEMPTS = 30
     }
 
     private fun toast(message: String) {

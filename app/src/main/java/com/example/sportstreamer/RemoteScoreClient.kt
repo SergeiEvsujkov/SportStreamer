@@ -65,6 +65,7 @@ class RemoteScoreClient(
                     return@thread
                 }
 
+                Log.i(TAG, "подключено к $host:$port")
                 main.post { listener.onConnected() }
                 // Heartbeat: раз в 5 секунд, чтобы соединение не считалось простаивающим.
                 val ping = object : Runnable {
@@ -78,7 +79,12 @@ class RemoteScoreClient(
                 main.postDelayed(ping, PING_INTERVAL_MS)
                 // Держим соединение и принимаем состояние матча.
                 while (running) {
-                    val line = reader.readLine() ?: break
+                    val line = reader.readLine()
+                    if (line == null) {
+                        Log.w(TAG, "сервер закрыл соединение (EOF)")
+                        break
+                    }
+                    Log.i(TAG, "получено: $line")
                     val message = runCatching { JSONObject(line) }.getOrNull() ?: continue
                     if (message.optString(RemoteScoreProtocol.FIELD_CMD) == RemoteScoreProtocol.CMD_STATE) {
                         val t1 = message.optInt(RemoteScoreProtocol.FIELD_T1)
@@ -94,7 +100,7 @@ class RemoteScoreClient(
                 }
                 disconnect(null)
             } catch (e: Exception) {
-                Log.w(TAG, "Не удалось подключиться к пульту", e)
+                Log.w(TAG, "обрыв: ${e::class.java.simpleName} ${e.message}", e)
                 disconnect("Не удалось подключиться")
             }
         }
@@ -113,8 +119,9 @@ class RemoteScoreClient(
                 flush()
             }
         } catch (e: Exception) {
+            // Одна неудачная запись не означает, что соединение мертво: не рвём его,
+            // иначе пульт отваливается от любого таймаута записи.
             Log.w(TAG, "Команда не отправлена", e)
-            disconnect(null)
         }
     }
 

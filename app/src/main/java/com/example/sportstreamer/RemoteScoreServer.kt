@@ -91,11 +91,13 @@ class RemoteScoreServer(
             client = socket
             clientWriter = writer
             main.post { listener.onClientConnected() }
-            Log.i(TAG, "Пульт подключён")
+            Log.i(TAG, "Пульт подключён, код верный")
 
             while (running) {
                 val line = reader.readLine() ?: break
-                val message = JSONObject(line)
+                Log.i(TAG, "получено: $line")
+                // Битая строка — не повод рвать соединение: пропускаем и читаем дальше.
+                val message = runCatching { JSONObject(line) }.getOrNull() ?: continue
                 when (message.optString(RemoteScoreProtocol.FIELD_CMD)) {
                     RemoteScoreProtocol.CMD_POINT -> {
                         val team = message.optInt(RemoteScoreProtocol.FIELD_TEAM, 0)
@@ -121,7 +123,7 @@ class RemoteScoreServer(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Соединение с пультом прервано", e)
+            Log.w(TAG, "Соединение с пультом прервано: ${e::class.java.simpleName} ${e.message}", e)
         } finally {
             try {
                 client?.close()

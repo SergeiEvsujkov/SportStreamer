@@ -364,10 +364,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     override fun onDestroy() {
         super.onDestroy()
         StreamService.stop(this)
-        remoteServer?.stop()
-        remoteServer = null
-        remoteHotspot?.stop()
-        remoteHotspot = null
+        // Сервер пульта гасим только при реальном закрытии приложения: при пересоздании
+        // активити (смена конфигурации, возврат из фона) соединение с пультом должно жить.
+        if (isFinishing) {
+            remoteServer?.stop()
+            remoteServer = null
+            remoteHotspot?.stop()
+            remoteHotspot = null
+        }
         panelLayoutListener?.let { binding.settingsHost.removeOnLayoutChangeListener(it) }
         panelLayoutListener = null
         stopZoomHold()
