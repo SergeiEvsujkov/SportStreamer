@@ -271,7 +271,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // затем графику счёта.
         rtmpCamera2?.let { ensurePreview(it) }
         if (previewRunning) {
-            attachOverlay()
+            attachOverlayWhenGlReady()
             // Настройку могли изменить на экране настроек — применяем заново.
             applyVideoStabilization()
             applyExposure()
@@ -532,7 +532,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             ensurePreview(camera)
         }
         if (previewRunning) {
-            attachOverlay()
+            attachOverlayWhenGlReady()
             applyVideoStabilization()
             applyExposure()
         }
@@ -751,8 +751,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 // подключение потерянным: ensurePreview() ниже добавит фильтры заново.
                 // При старте/остановке записи и эфира surfaceCreated не приходит, так что
                 // на них это никак не влияет.
+                val wasRunning = previewRunning
                 overlay?.invalidate()
                 ensurePreview(camera)
+                // Если превью уже работало, ensurePreview() выходит сразу, а фильтры из
+                // прошлого GL-контекста потеряны — возвращаем их после старта GL.
+                if (wasRunning) attachOverlayWhenGlReady()
             }
 
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
@@ -888,7 +892,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             applyZoom()   // камера открылась заново — возвращаем прежний зум
             applyVideoStabilization()   // и настройку стабилизации
             applyExposure()             // и автоэкспозицию с поправкой яркости
-            attachOverlay()
+            attachOverlayWhenGlReady()
         } catch (e: Exception) {
             Log.e(TAG, "Не удалось запустить превью", e)
         }
@@ -898,6 +902,29 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private fun attachOverlay() {
         val currentOverlay = overlay ?: return
         currentOverlay.attach(overlayState(), settings.team1Color, settings.team2Color)
+    }
+
+    /**
+     * Подключает оверлей, дождавшись реального запуска GL.
+     *
+     * `startPreview()` поднимает GL-поток асинхронно, а фильтры, добавленные до его старта,
+     * теряются: в первом запуске из-за этого не появлялась графика счёта, а после повторного
+     * открытия настроек возникала. Ждём `glInterface.isRunning` и только затем добавляем.
+     */
+    private fun attachOverlayWhenGlReady(attempt: Int = 0) {
+        val camera = rtmpCamera2 ?: return
+        if (overlay == null) return
+        if (previewRunning && camera.glInterface.isRunning) {
+            attachOverlay()
+            return
+        }
+        if (attempt >= GL_READY_ATTEMPTS) {
+            Log.w(TAG, "GL не запустился за ${GL_READY_ATTEMPTS * GL_READY_STEP_MS} мс — оверлей не подключён")
+            return
+        }
+        handler.postDelayed({
+            if (!isFinishing && !isDestroyed) attachOverlayWhenGlReady(attempt + 1)
+        }, GL_READY_STEP_MS)
     }
 
     /**
@@ -1701,6 +1728,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     private companion object {
         const val TAG = "MainActivity"
+
+        /** Шаг и число попыток дождаться запуска GL, прежде чем подключать оверлей. */
+        const val GL_READY_STEP_MS = 100L
+        const val GL_READY_ATTEMPTS = 20
 
         const val MEGABIT = 1024.0 * 1024.0
 
