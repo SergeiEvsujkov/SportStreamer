@@ -371,8 +371,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         binding.secondPlusButton.setOnClickListener { onPoint(ScoreEngine.Team.SECOND, add = true) }
         binding.secondMinusButton.setOnClickListener { onPoint(ScoreEngine.Team.SECOND, add = false) }
 
-        binding.streamBtn.setOnClickListener { toggleBroadcast() }
-        binding.recordBtn.setOnClickListener { toggleRecording() }
+        binding.streamBtn.setOnClickListener { toggleSession() }
+        // Вторая кнопка больше не нужна: режим выбирается в настройках, запуск — одной кнопкой.
+        binding.recordBtn.isVisible = false
         binding.fullscreenBtn.setOnClickListener { setPreviewFullscreen(true) }
         binding.collapseBtn.setOnClickListener { setPreviewFullscreen(false) }
         // Короткое нажатие — один шаг, удержание — плавное изменение (startZoomHold).
@@ -1288,6 +1289,39 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Верхняя строка пульта: включить или выключить эфир. Запись не трогаем. */
+    /**
+     * Единственная кнопка пульта: запускает выбранный в настройках режим или останавливает всё.
+     *
+     * Состав кодировщиков фиксируется на старте и не меняется до конца сессии — именно
+     * пересборки GL во время работы давали чёрный кадр.
+     */
+    private fun toggleSession() {
+        val camera = rtmpCamera2 ?: return
+
+        if (camera.isStreaming || isRecordingNow) {
+            stopSession()
+            return
+        }
+
+        when (settings.startMode) {
+            StartMode.RECORD -> startRecording()
+            StartMode.STREAM -> startBroadcast()
+            else -> {
+                startBroadcast()
+                // Запись начинается сразу после успешного подключения, тем же кодеком.
+                if (camera.isStreaming && !isRecordingNow) startLocalRecording()
+            }
+        }
+        updateUi()
+    }
+
+    /** Останавливает то, что было запущено, в правильном порядке: сначала поток, потом файл. */
+    private fun stopSession() {
+        if (rtmpCamera2?.isStreaming == true) toggleBroadcast()
+        if (isRecordingNow) toggleRecording()
+        updateUi()
+    }
+
     private fun toggleBroadcast() {
         val camera = rtmpCamera2 ?: return
         if (camera.isStreaming) {
@@ -1446,7 +1480,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         attachOverlayWhenGlReady()
 
         // Если запись шла до старта эфира — продолжаем её новой частью (старая закрыта выше).
-        if (wasRecording) startLocalRecording()
+        // В режиме «эфир и запись» файл начинается сразу после подключения, тем же кодеком.
+        if (wasRecording || StartMode.includesRecording(settings.startMode)) startLocalRecording()
 
         bitrateAdapter.reset(SystemClock.elapsedRealtime(), safeBytesSent(camera))
         handler.removeCallbacks(bitrateTicker)

@@ -146,5 +146,14 @@
 
     <!-- Смена темы пересоздаёт экран, поэтому во время эфира применяется позже. -->
     <string name="settings_theme_applied_later">Тема применится после остановки эфира и записи</string>
+    <!-- Режим запуска: одна кнопка на пульте -->
+    <string name="settings_mode_header">Что запускать</string>
+    <string name="settings_mode_stream">Только эфир</string>
+    <string name="settings_mode_record">Только запись</string>
+    <string name="settings_mode_both">Эфир и запись</string>
+
+    <string name="main_start">Старт</string>
+    <string name="main_stop">Стоп</string>
+
 </resources>
 

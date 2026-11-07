@@ -250,35 +250,42 @@ class SettingsPanel(
         binding.brightnessLabel.text = context.getString(R.string.settings_brightness_label, percent)
     }
 
+    /** Выбранный режим запуска: эфир, запись или оба. */
+    private var selectedMode = StartMode.BOTH
+
     /**
-     * Трансляция и запись. Без трансляции поля RTMP не нужны, а запись в память становится
-     * единственным смыслом работы — поэтому она включается принудительно.
+     * Трансляция и запись. Без трансляции поля RTMP не нужны; поля записи видны, только
+     * когда запись входит в выбранный режим.
      */
     private fun setupBroadcastAndRecording() {
-        binding.switchBroadcast.setOnCheckedChangeListener { _, enabled ->
-            updateBroadcastDependentViews(enabled)
+        // Прежние переключатели больше не используются — режим выбирается выше.
+        binding.switchBroadcast.isVisible = false
+        binding.switchSaveVideo.isVisible = false
+
+        binding.rgMode.setOnCheckedChangeListener { _, checkedId ->
+            if (loadingSettings) return@setOnCheckedChangeListener
+            selectedMode = when (checkedId) {
+                R.id.rbModeStream -> StartMode.STREAM
+                R.id.rbModeRecord -> StartMode.RECORD
+                else -> StartMode.BOTH
+            }
+            updateModeDependentViews(selectedMode)
             updateRtmpHint()
-            persistSettings()
-        }
-        binding.switchSaveVideo.setOnCheckedChangeListener { _, enabled ->
-            updateRecordingOptionsVisibility(enabled)
             persistSettings()
         }
         binding.switchStabilization.setOnCheckedChangeListener { _, _ -> persistSettings() }
     }
 
-    /** Деление записи и битрейт нужны только тогда, когда запись в память вообще включена. */
-    private fun updateRecordingOptionsVisibility(saveVideoEnabled: Boolean) {
-        binding.splitLabel.isVisible = saveVideoEnabled
-        binding.rgSplit.isVisible = saveVideoEnabled
-        binding.recordBitrateLabel.isVisible = saveVideoEnabled
-        binding.rgRecordBitrate.isVisible = saveVideoEnabled
-        binding.recordBitrateHint.isVisible = saveVideoEnabled
-    }
+    /** Видимость карточек и опций зависит от режима: RTMP нужен только для эфира. */
+    private fun updateModeDependentViews(mode: Int) {
+        binding.rtmpCard.isVisible = StartMode.includesStream(mode)
 
-    private fun updateBroadcastDependentViews(broadcastEnabled: Boolean) {
-        binding.rtmpCard.isVisible = broadcastEnabled
-        updateRecordingOptionsVisibility(binding.switchSaveVideo.isChecked)
+        val recording = StartMode.includesRecording(mode)
+        binding.splitLabel.isVisible = recording
+        binding.rgSplit.isVisible = recording
+        binding.recordBitrateLabel.isVisible = recording
+        binding.rgRecordBitrate.isVisible = recording
+        binding.recordBitrateHint.isVisible = recording
     }
 
     /**
@@ -317,9 +324,13 @@ class SettingsPanel(
         selectedColor2 = settings.team2Color
         restoreColorSelection()
 
-        binding.switchBroadcast.isChecked = settings.broadcastEnabled
-        binding.switchSaveVideo.isChecked = settings.saveVideoLocally
-        updateBroadcastDependentViews(settings.broadcastEnabled)
+        selectedMode = settings.startMode
+        when (settings.startMode) {
+            StartMode.STREAM -> binding.rbModeStream.isChecked = true
+            StartMode.RECORD -> binding.rbModeRecord.isChecked = true
+            else -> binding.rbModeBoth.isChecked = true
+        }
+        updateModeDependentViews(settings.startMode)
 
         when (settings.splitMinutes) {
             10 -> binding.rbSplit10.isChecked = true
@@ -403,8 +414,9 @@ class SettingsPanel(
                 },
                 rtmpUrl = binding.etRtmpUrl.text?.toString()?.trim().orEmpty(),
                 rtmpKey = binding.etRtmpKey.text?.toString()?.trim().orEmpty(),
-                saveVideoLocally = binding.switchSaveVideo.isChecked,
-                broadcastEnabled = binding.switchBroadcast.isChecked,
+                saveVideoLocally = StartMode.includesRecording(selectedMode),
+                broadcastEnabled = StartMode.includesStream(selectedMode),
+                startMode = selectedMode,
                 splitMinutes = when {
                     binding.rbSplit10.isChecked -> 10
                     binding.rbSplit20.isChecked -> 20

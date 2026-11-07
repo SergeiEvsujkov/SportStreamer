@@ -17,6 +17,8 @@ data class SettingsLoc(
     val saveVideoLocally: Boolean = false,
     /** Трансляция в интернет. Выключено — пишем только в память телефона. */
     val broadcastEnabled: Boolean = true,
+    /** Что запускает кнопка пульта: [StartMode.STREAM], [StartMode.RECORD] или [StartMode.BOTH]. */
+    val startMode: Int = StartMode.BOTH,
     /** Делить запись на части: 0 — не делить, иначе длина части в минутах. */
     val splitMinutes: Int = RecordingParts.NO_SPLIT,
     /** Битрейт записи в память, Мбит/с: 1, 3 или 5. Действует, когда трансляция выключена. */
@@ -65,6 +67,7 @@ object SettingsRepository {
     private const val KEY_BROADCAST_ENABLED = "broadcast_enabled"
     private const val KEY_SPLIT_MINUTES = "split_minutes"
     private const val KEY_RECORD_BITRATE = "record_bitrate_mbps"
+    private const val KEY_START_MODE = "start_mode"
     private const val KEY_THEME_MODE = "theme_mode"
     private const val KEY_VIDEO_STABILIZATION = "video_stabilization"
     private const val KEY_AUTO_EXPOSURE = "auto_exposure"
@@ -83,6 +86,18 @@ object SettingsRepository {
             prefs.getInt(KEY_SETS_TO_WIN_LEGACY, ScoreEngine.SETS_TO_WIN_BEST_OF_THREE)
         }
 
+        // Режим хранится отдельно. Для старых установок выводим его из двух прежних флагов.
+        val storedMode = prefs.getInt(KEY_START_MODE, -1)
+        val legacyBroadcast = prefs.getBoolean(KEY_BROADCAST_ENABLED, true)
+        val legacySave = prefs.getBoolean(KEY_SAVE_VIDEO, false)
+        val startMode = when {
+            storedMode in StartMode.OPTIONS -> storedMode
+            legacyBroadcast && legacySave -> StartMode.BOTH
+            legacyBroadcast -> StartMode.STREAM
+            legacySave -> StartMode.RECORD
+            else -> StartMode.BOTH
+        }
+
         return SettingsLoc(
             team1Name = prefs.getString(KEY_TEAM1_NAME, "").orEmpty(),
             team2Name = prefs.getString(KEY_TEAM2_NAME, "").orEmpty(),
@@ -91,8 +106,9 @@ object SettingsRepository {
             setsToWin = setsToWin,
             rtmpUrl = prefs.getString(KEY_RTMP_URL, "").orEmpty(),
             rtmpKey = prefs.getString(KEY_RTMP_KEY, "").orEmpty(),
-            saveVideoLocally = prefs.getBoolean(KEY_SAVE_VIDEO, false),
-            broadcastEnabled = prefs.getBoolean(KEY_BROADCAST_ENABLED, true),
+            saveVideoLocally = StartMode.includesRecording(startMode),
+            broadcastEnabled = StartMode.includesStream(startMode),
+            startMode = startMode,
             splitMinutes = prefs.getInt(KEY_SPLIT_MINUTES, RecordingParts.NO_SPLIT),
             recordBitrateMbps = prefs.getInt(KEY_RECORD_BITRATE, RecordingBitrate.DEFAULT_MBPS),
             themeMode = prefs.getInt(KEY_THEME_MODE, ThemeMode.SYSTEM),
@@ -112,8 +128,9 @@ object SettingsRepository {
             .putInt(KEY_SETS_TO_WIN, settings.setsToWin)
             .putString(KEY_RTMP_URL, settings.rtmpUrl)
             .putString(KEY_RTMP_KEY, settings.rtmpKey)
-            .putBoolean(KEY_SAVE_VIDEO, settings.saveVideoLocally)
-            .putBoolean(KEY_BROADCAST_ENABLED, settings.broadcastEnabled)
+            .putBoolean(KEY_SAVE_VIDEO, StartMode.includesRecording(settings.startMode))
+            .putBoolean(KEY_BROADCAST_ENABLED, StartMode.includesStream(settings.startMode))
+            .putInt(KEY_START_MODE, settings.startMode)
             .putInt(KEY_SPLIT_MINUTES, settings.splitMinutes)
             .putInt(KEY_RECORD_BITRATE, settings.recordBitrateMbps)
             .putInt(KEY_THEME_MODE, settings.themeMode)
