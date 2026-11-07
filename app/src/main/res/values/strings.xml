@@ -3,6 +3,7 @@
     <string name="app_name">SportStreamer</string>
 
     <!-- Экран настроек -->
+    <string name="settings_guide_title">Инструкция</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_team1_header">КОМАНДА 1</string>
     <string name="settings_team2_header">КОМАНДА 2</string>

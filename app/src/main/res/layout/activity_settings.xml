@@ -16,6 +16,7 @@
         app:navigationContentDescription="@string/desc_settings_back"
         app:navigationIcon="@drawable/ic_arrow_back"
         app:navigationIconTint="?attr/colorOnSurface"
+        app:menu="@menu/menu_settings"
         app:title="@string/settings_title"
         app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 

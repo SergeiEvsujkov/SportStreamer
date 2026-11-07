@@ -90,6 +90,13 @@ class SettingsPanel(
     fun attach() {
         if (styleWindow) applyWindowSurfaces()
         binding.toolbar.setNavigationOnClickListener { onClose() }
+        // Инструкция: содержимое добавляется отдельно, пока кнопка только на месте.
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_guide -> true
+                else -> false
+            }
+        }
 
         setupTeamNameFields()
         setupColorPickers()
