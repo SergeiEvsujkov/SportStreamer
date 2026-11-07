@@ -433,9 +433,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val hostHeight = host.height
         if (hostWidth == 0 || hostHeight == 0) return
 
-        // 90° — читаемый текст, если телефон поворачивают верхним краем влево.
-        // При обратном хвате достаточно поменять знак на -90f.
-        panel.rotation = 90f
+        // -90° — читаемый текст при обычном хвате (верхний край телефона справа).
+        // Если понадобится обратный хват, знак меняется на 90f.
+        panel.rotation = -90f
         val params = panel.layoutParams as? FrameLayout.LayoutParams
             ?: FrameLayout.LayoutParams(hostHeight, hostWidth, Gravity.CENTER)
         params.width = hostHeight
