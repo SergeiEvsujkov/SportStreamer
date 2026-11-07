@@ -630,6 +630,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     /** Открытый диалог завершения партии: его может закрыть и пульт. */
     private var setFinishedDialog: androidx.appcompat.app.AlertDialog? = null
+    private var matchFinishedDialog: androidx.appcompat.app.AlertDialog? = null
     private var pendingSetWinner: ScoreEngine.Team? = null
 
     /** Сервер удалённого пульта: работает, пока открыт диалог сопряжения. */
@@ -695,6 +696,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                         game = engine.team1Sets + engine.team2Sets + 1,
                         setPending = setFinishedDialog != null,
                         matchOver = engine.isMatchOver,
+                matchPending = matchFinishedDialog != null,
                         setsToWin = settings.setsToWin,
                         team1Name = settings.team1Name,
                         team2Name = settings.team2Name
@@ -707,7 +709,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                             add
                         )
                     }
-                }
+                },
+                setDecisionHandler = { newSet -> handler.post { applyRemoteSetDecision(newSet) } },
+                matchDecisionHandler = { again -> handler.post { applyRemoteMatchDecision(again) } }
             ).also { it.start() }
         }
 
@@ -1033,7 +1037,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     private fun showMatchFinishedDialog(winner: ScoreEngine.Team) {
         val winnerName = if (winner == ScoreEngine.Team.FIRST) settings.team1Name else settings.team2Name
-        MaterialAlertDialogBuilder(this)
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.main_match_finished_title)
             .setMessage(
                 getString(
@@ -1046,12 +1050,32 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             .setCancelable(false)
             .setPositiveButton(R.string.main_match_finished_positive) { _, _ ->
                 engine.resetMatch()
+                matchFinishedDialog = null
                 onMatchChanged()
             }
-            .setNegativeButton(R.string.main_match_finished_negative) { dialog, _ ->
-                dialog.dismiss()
+            .setNegativeButton(R.string.main_match_finished_negative) { dialogView, _ ->
+                matchFinishedDialog = null
+                dialogView.dismiss()
+                onMatchChanged()
             }
-            .show()
+            .create()
+        matchFinishedDialog = dialog
+        dialog.setOnDismissListener {
+            matchFinishedDialog = null
+            broadcastRemoteState()
+        }
+        dialog.show()
+        // Пульт видит, что матч завершён, и может начать новую игру сам.
+        broadcastRemoteState()
+    }
+
+    /** Решение по завершённому матчу, пришедшее с пульта: новая игра или просто закрыть. */
+    private fun applyRemoteMatchDecision(again: Boolean) {
+        if (matchFinishedDialog == null) return
+        if (again) engine.resetMatch()
+        matchFinishedDialog?.dismiss()
+        matchFinishedDialog = null
+        onMatchChanged()
     }
 
     /** Отправляет пульту текущее состояние: счёт, партии, ожидание решения по партии. */
@@ -1066,6 +1090,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 game = engine.team1Sets + engine.team2Sets + 1,
                 setPending = setFinishedDialog != null,
                 matchOver = engine.isMatchOver,
+                matchPending = matchFinishedDialog != null,
                 setsToWin = settings.setsToWin,
                 team1Name = settings.team1Name,
                 team2Name = settings.team2Name

@@ -34,6 +34,7 @@ object RemoteScoreProtocol {
     const val FIELD_S2 = "s2"
     const val FIELD_GAME = "game"
     const val FIELD_SET_PENDING = "setPending"
+    const val FIELD_MATCH_PENDING = "matchPending"
     const val FIELD_MATCH_OVER = "matchOver"
     const val FIELD_SETS_TO_WIN = "setsToWin"
     const val FIELD_TEAM1_NAME = "team1Name"
@@ -65,6 +66,7 @@ object RemoteScoreProtocol {
         game: Int,
         setPending: Boolean,
         matchOver: Boolean,
+        matchPending: Boolean,
         setsToWin: Int,
         team1Name: String,
         team2Name: String
@@ -77,6 +79,7 @@ object RemoteScoreProtocol {
         .put(FIELD_GAME, game)
         .put(FIELD_SET_PENDING, setPending)
         .put(FIELD_MATCH_OVER, matchOver)
+        .put(FIELD_MATCH_PENDING, matchPending)
         .put(FIELD_SETS_TO_WIN, setsToWin)
         .put(FIELD_TEAM1_NAME, team1Name)
         .put(FIELD_TEAM2_NAME, team2Name)

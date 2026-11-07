@@ -21,7 +21,9 @@ import kotlin.concurrent.thread
 class RemoteWebServer(
     private val token: String,
     private val stateProvider: () -> String,
-    private val pointHandler: (team: Int, add: Boolean) -> Unit
+    private val pointHandler: (team: Int, add: Boolean) -> Unit,
+    private val setDecisionHandler: (newSet: Boolean) -> Unit,
+    private val matchDecisionHandler: (again: Boolean) -> Unit
 ) {
 
     private var serverSocket: ServerSocket? = null
@@ -81,6 +83,16 @@ class RemoteWebServer(
 
                 method == "GET" && path == "/state" ->
                     respond(client, 200, "application/json; charset=utf-8", stateProvider())
+
+                method == "POST" && path == "/set-decision" -> {
+                    setDecisionHandler(query["newSet"] == "1" || query["newSet"] == "true")
+                    respond(client, 200, "application/json; charset=utf-8", "{\"ok\":true}")
+                }
+
+                method == "POST" && path == "/match-decision" -> {
+                    matchDecisionHandler(query["again"] == "1" || query["again"] == "true")
+                    respond(client, 200, "application/json; charset=utf-8", "{\"ok\":true}")
+                }
 
                 method == "POST" && path == "/point" -> {
                     val team = query["team"]?.toIntOrNull() ?: 0
@@ -177,9 +189,23 @@ class RemoteWebServer(
     <button class="minus" onclick="point(2,0)">−1</button>
   </div>
 </div>
+<div id="decision"></div>
 <div id="status">—</div>
+<style>
+  #decision { padding:0 16px 16px; }
+  #decision button { margin-bottom:8px; }
+</style>
 <script>
 const t = new URLSearchParams(location.search).get('t') || '';
+async function post(path) {
+  try {
+    await fetch(path + '&t=' + encodeURIComponent(t), {method:'POST'});
+    await tick();
+  } catch (e) { el('status').textContent = 'нет связи с источником'; }
+}
+function decisionButton(label, path) {
+  return '<button onclick="post(\'' + path + '\')">' + label + '</button>';
+}
 const el = id => document.getElementById(id);
 async function point(team, add) {
   try {
@@ -195,8 +221,19 @@ async function tick() {
     el('n2').textContent = s.team2Name || 'Команда 2';
     el('score').textContent = 'Партии ' + s.s1 + ':' + s.s2 +
         ' · счёт ' + s.t1 + ':' + s.t2 + ' · партия ' + s.game + ' из ' + (s.setsToWin*2-1);
-    el('status').textContent = s.setPending ? 'партия завершена — решение на телефоне-источнике'
-        : (s.matchOver ? 'матч завершён' : 'связь есть');
+    const d = el('decision');
+    if (s.setPending) {
+      d.innerHTML = decisionButton('Новая партия', '/set-decision?newSet=1') +
+                    decisionButton('Продолжить', '/set-decision?newSet=0');
+      el('status').textContent = 'партия завершена — решите здесь или на телефоне';
+    } else if (s.matchPending) {
+      d.innerHTML = decisionButton('Новая игра', '/match-decision?again=1') +
+                    decisionButton('Закрыть', '/match-decision?again=0');
+      el('status').textContent = 'матч завершён — решите здесь или на телефоне';
+    } else {
+      d.innerHTML = '';
+      el('status').textContent = s.matchOver ? 'матч завершён' : 'связь есть';
+    }
   } catch (e) { el('status').textContent = 'нет связи с источником'; }
 }
 setInterval(tick, 1000);
