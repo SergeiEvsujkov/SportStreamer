@@ -904,13 +904,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     /** Адрес телефона в локальной сети: первый IPv4, не относящийся к loopback. */
     private fun localIpAddress(): String? = try {
-        java.net.NetworkInterface.getNetworkInterfaces().toList()
+        val addresses = java.net.NetworkInterface.getNetworkInterfaces().toList()
             .asSequence()
             .filter { it.isUp && !it.isLoopback }
             .flatMap { it.inetAddresses.toList().asSequence() }
             .filterIsInstance<java.net.Inet4Address>()
-            .firstOrNull { !it.isLoopbackAddress }
-            ?.hostAddress
+            .filter { !it.isLoopbackAddress }
+            .mapNotNull { it.hostAddress }
+            .toList()
+        // Если включена точка доступа (наша или обычная), её адрес важнее домашнего:
+        // второй телефон видит телефон только в этой сети.
+        addresses.firstOrNull { it.startsWith("192.168.43.") || it.startsWith("192.168.49.") }
+            ?: addresses.firstOrNull()
     } catch (e: Exception) {
         Log.w(TAG, "Не удалось определить локальный адрес", e)
         null
