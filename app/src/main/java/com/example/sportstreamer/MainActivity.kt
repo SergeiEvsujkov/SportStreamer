@@ -2,6 +2,7 @@ package com.example.sportstreamer
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
@@ -83,6 +84,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      * превью не уничтожается, запись и эфир продолжаются.
      */
     private var settingsPanel: SettingsPanel? = null
+
+    /** Контейнер панели настроек: он же приёмник смахивания и объект поворота. */
+    private var settingsPanelContainer: SwipeDismissFrameLayout? = null
 
     /** Настройки уже показаны при первом запуске — второй раз не открываем. */
     private var awaitingSettings = false
@@ -456,6 +460,33 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /**
+     * Раскладка панели под текущую ориентацию окна.
+     *
+     * Если ничего не пишется и не транслируется, окно переводится в портрет — тогда и
+     * системная клавиатура открывается вертикально, а панель занимает экран как есть.
+     * Во время эфира ориентацию менять нельзя: это уничтожило бы поверхность превью и
+     * прервало запись, поэтому панель остаётся повёрнутой внутри ландшафтного окна.
+     */
+    private fun applyPanelLayout() {
+        val panel = settingsPanelContainer ?: return
+        val portrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        if (portrait) {
+            panel.rotation = 0f
+            panel.layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            return
+        }
+        applyPortraitLayout(binding.settingsHost, panel)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (settingsPanel != null) applyPanelLayout()
+    }
+
+    /**
      * Показывает настройки панелью поверх пульта.
      *
      * Отдельная активити для этого не годится: её запуск переводит пульт в `onPause`
@@ -465,6 +496,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      */
     private fun showSettingsPanel() {
         if (settingsPanel != null) return
+
+        val live = isRecordingNow || rtmpCamera2?.isStreaming == true
 
         val panelBinding = ActivitySettingsBinding.inflate(layoutInflater, binding.settingsHost, false)
         binding.settingsHost.removeAllViews()
@@ -492,13 +525,18 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
-        // Настройки всегда вертикальные, а пульт — всегда ландшафтный. Менять ориентацию
-        // окна нельзя: это пересоздало бы поверхность превью и прервало запись. Поэтому
-        // панель раскладывается как портретный экран (высота окна × ширина окна) и
-        // поворачивается на 90°: телефон держат вертикально, и содержимое читается нормально.
-        applyPortraitLayout(binding.settingsHost, swipeContainer)
+        settingsPanelContainer = swipeContainer
+        // Пока идёт эфир или запись, ориентацию окна не трогаем: смена ориентации
+        // уничтожает поверхность превью и обрывает запись. В остальное время переводим
+        // окно в портрет, чтобы клавиатура ввода тоже была вертикальной.
+        requestedOrientation = if (live) {
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        applyPanelLayout()
         binding.settingsHost.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            applyPortraitLayout(binding.settingsHost, swipeContainer)
+            applyPanelLayout()
         }
         // Панель занимает весь экран, поэтому отступы системных панелей добавляем сами.
         ViewCompat.setOnApplyWindowInsetsListener(panelBinding.root) { view, insets ->
@@ -530,8 +568,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val panel = settingsPanel ?: return
         panel.commit()
         settingsPanel = null
+        settingsPanelContainer = null
         binding.settingsHost.removeAllViews()
         binding.settingsHost.isVisible = false
+        // Пульт всегда ландшафтный: после закрытия настроек возвращаем окно в него.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
         settings = SettingsRepository.load(this)
         if (settings.setsToWin != engine.setsToWin) {
