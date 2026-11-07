@@ -207,6 +207,7 @@
     <string name="remote_hotspot_start">Поднять точку доступа</string>
     <string name="remote_hotspot_ready">Точка доступа включена: %1$s</string>
     <string name="remote_hotspot_permission">Без доступа к геолокации система не даёт включить точку доступа</string>
+    <string name="remote_hotspot_details">Сеть: %1$s · пароль: %2$s</string>
     <string name="remote_address_line">Адрес: %1$s</string>
     <string name="remote_pin_line">Код: %1$s</string>
     <string name="remote_client_short">Я пульт</string>

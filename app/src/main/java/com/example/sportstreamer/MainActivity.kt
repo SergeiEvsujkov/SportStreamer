@@ -607,6 +607,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Локальная точка доступа: поднимается по кнопке, чтобы второму телефону было к чему подключаться. */
     private var remoteHotspot: RemoteHotspot? = null
     private var remoteWeb: RemoteWebServer? = null
+    /** Адрес телефона в сети точки доступа: по нему второй телефон открывает страницу. */
+    private var hotspotAddress: String? = null
+    private var remoteAddressView: android.widget.TextView? = null
+    private var remoteNetworkView: android.widget.TextView? = null
     private var hotspotSsid: String = ""
     private var hotspotPassword: String = ""
     private var remoteQrView: android.widget.ImageView? = null
@@ -749,18 +753,32 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             setPadding((16 * density).toInt(), 0, 0, 0)
         }
 
-        right.addView(android.widget.TextView(this).apply {
+        val addressView = android.widget.TextView(this).apply {
             text = getString(
                 R.string.remote_address_line,
-                address?.let { "$it:${RemoteScoreProtocol.PORT}" } ?: "—"
+                address?.let { "$it:${RemoteWebServer.PORT}" } ?: "—"
             )
             textSize = 16f
-        })
+        }
+        remoteAddressView = addressView
+        right.addView(addressView)
         right.addView(android.widget.TextView(this).apply {
             text = getString(R.string.remote_pin_line, pin)
             textSize = 26f
             setPadding(0, (4 * density).toInt(), 0, (12 * density).toInt())
         })
+
+        // Сеть и пароль точки доступа: без них второй телефон не к чему подключать.
+        val networkView = android.widget.TextView(this).apply {
+            text = ""
+            textSize = 14f
+            setPadding(0, 0, 0, (8 * density).toInt())
+        }
+        remoteNetworkView = networkView
+        if (hotspotSsid.isNotEmpty()) {
+            networkView.text = getString(R.string.remote_hotspot_details, hotspotSsid, hotspotPassword)
+        }
+        right.addView(networkView)
         right.addView(com.google.android.material.button.MaterialButton(
             this,
             null,
@@ -794,8 +812,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 override fun onReady(ssid: String, password: String) {
                     hotspotSsid = ssid
                     hotspotPassword = password
+                    // Адрес мог измениться: телефон ушёл в сеть точки доступа.
+                    hotspotAddress = findHotspotAddress() ?: address
                     toast(getString(R.string.remote_hotspot_ready, ssid))
-                    updateQrCode(address)
+                    remoteNetworkView?.text =
+                        getString(R.string.remote_hotspot_details, ssid, password)
+                    remoteAddressView?.text =
+                        getString(R.string.remote_address_line, "$hotspotAddress:${RemoteWebServer.PORT}")
+                    updateQrCode(hotspotAddress)
                 }
 
                 override fun onFailed(reason: String) {
@@ -828,9 +852,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Содержимое QR: адрес, код и, если точка поднята, данные сети. */
-    private fun buildRemoteQrPayload(address: String): String =
-        // QR ведёт на страницу в браузере: второму телефону приложение не нужно.
-        "http://$address:${RemoteWebServer.PORT}/?t=${currentRemotePin()}"
+    private fun buildRemoteQrPayload(address: String): String {
+        // После включения точки доступа домашний адрес недоступен второму телефону:
+        // в QR должен попасть адрес в сети точки (обычно 192.168.43.1).
+        val actual = hotspotAddress ?: address
+        return "http://$actual:${RemoteWebServer.PORT}/?t=${currentRemotePin()}"
+    }
 
     /** Код сопряжения текущей сессии пульта (тот, что показан в диалоге). */
     private fun currentRemotePin(): String = remotePin
@@ -853,6 +880,25 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         bitmap
     } catch (e: Exception) {
         Log.w(TAG, "Не удалось построить QR-код", e)
+        null
+    }
+
+    /**
+     * Адрес телефона в сети созданной точки доступа.
+     *
+     * Домашний Wi-Fi при этом обычно отключается, и прежний адрес становится недоступен
+     * второму телефону. Ищем адрес, выданный интерфейсу точки (обычно 192.168.43.x).
+     */
+    private fun findHotspotAddress(): String? = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList().asSequence() }
+            .filterIsInstance<java.net.Inet4Address>()
+            .mapNotNull { it.hostAddress }
+            .firstOrNull { it.startsWith("192.168.43.") || it.startsWith("192.168.49.") }
+    } catch (e: Exception) {
+        Log.w(TAG, "Не удалось определить адрес точки доступа", e)
         null
     }
 
