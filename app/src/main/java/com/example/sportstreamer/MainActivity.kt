@@ -1256,7 +1256,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val camera = rtmpCamera2 ?: return
 
         if (camera.isStreaming || isRecordingNow) {
-            stopSession()
+            confirmStopSession()
             return
         }
 
@@ -1272,6 +1272,26 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Пока идёт сессия, держим процесс в foreground: иначе Android запретит камеру в фоне.
         if (camera.isStreaming || isRecordingNow) StreamService.start(this)
         updateUi()
+    }
+
+    /**
+     * Подтверждение остановки: кнопка одна и на паузе пульта, и во время эфира, поэтому
+     * случайное касание не должно обрывать трансляцию или закрывать файл.
+     */
+    private fun confirmStopSession() {
+        val streaming = rtmpCamera2?.isStreaming == true
+        val recording = isRecordingNow
+        val message = when {
+            streaming && recording -> getString(R.string.stop_confirm_both)
+            recording -> getString(R.string.stop_confirm_record)
+            else -> getString(R.string.stop_confirm_stream)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.stop_confirm_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.stop_confirm_yes) { _, _ -> stopSession() }
+            .setNegativeButton(R.string.stop_confirm_no, null)
+            .show()
     }
 
     /** Останавливает то, что было запущено, в правильном порядке: сначала поток, потом файл. */

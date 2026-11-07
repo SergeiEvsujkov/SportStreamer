@@ -159,5 +159,13 @@
     <string name="service_channel">Эфир и запись</string>
     <string name="service_running">Идёт эфир или запись</string>
 
+    <!-- Подтверждение остановки сессии -->
+    <string name="stop_confirm_title">Остановить?</string>
+    <string name="stop_confirm_stream">Трансляция будет прекращена.</string>
+    <string name="stop_confirm_record">Запись будет закрыта и сохранена в галерею.</string>
+    <string name="stop_confirm_both">Эфир будет прекращён, запись закрыта и сохранена.</string>
+    <string name="stop_confirm_yes">Остановить</string>
+    <string name="stop_confirm_no">Продолжить</string>
+
 </resources>
 
