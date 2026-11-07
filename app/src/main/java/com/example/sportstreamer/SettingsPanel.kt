@@ -524,6 +524,6 @@ class SettingsPanel(
 
     private companion object {
         /** Ссылка кнопки «Поддержать проект». Пустая строка — кнопка показывает подсказку. */
-        const val SUPPORT_URL = ""
+        const val SUPPORT_URL = "https://spasibomir.ru/pay/35620"
     }
 }
