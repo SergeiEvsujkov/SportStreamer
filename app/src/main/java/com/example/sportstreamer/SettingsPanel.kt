@@ -90,6 +90,23 @@ class SettingsPanel(
     fun attach() {
         if (styleWindow) applyWindowSurfaces()
         binding.toolbar.setNavigationOnClickListener { onClose() }
+        binding.btnSupport.setOnClickListener {
+            // Ссылка на поддержку задаётся одной константой ниже.
+            if (SUPPORT_URL.isBlank()) {
+                android.widget.Toast.makeText(context, R.string.settings_support_no_link, android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                try {
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(SUPPORT_URL)
+                        )
+                    )
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, R.string.settings_support_no_link, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         // Инструкция: содержимое добавляется отдельно, пока кнопка только на месте.
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -503,5 +520,10 @@ class SettingsPanel(
             isAppearanceLightStatusBars = !darkTheme
             isAppearanceLightNavigationBars = !darkTheme
         }
+    }
+
+    private companion object {
+        /** Ссылка кнопки «Поддержать проект». Пустая строка — кнопка показывает подсказку. */
+        const val SUPPORT_URL = ""
     }
 }

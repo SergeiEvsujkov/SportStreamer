@@ -7,6 +7,11 @@
     <string name="update_available_message">Вышла новая версия приложения с исправлениями. Обновить сейчас?</string>
     <string name="update_available_yes">Обновить</string>
     <string name="update_available_later">Позже</string>
+    <string name="settings_support_title">Нравится приложение?</string>
+    <string name="settings_support_subtitle">Помоги развитию — поддержи проект.</string>
+    <string name="settings_support_button">Поддержать проект</string>
+    <string name="settings_support_note">SportStreamer — проект, сделанный в помощь родителям, тренерам и спортсменам.</string>
+    <string name="settings_support_no_link">Ссылка для поддержки пока не указана</string>
     <string name="settings_guide_title">Инструкция</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_team1_header">КОМАНДА 1</string>
