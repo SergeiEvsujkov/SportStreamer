@@ -258,10 +258,6 @@ class SettingsPanel(
      * когда запись входит в выбранный режим.
      */
     private fun setupBroadcastAndRecording() {
-        // Прежние переключатели больше не используются — режим выбирается выше.
-        binding.switchBroadcast.isVisible = false
-        binding.switchSaveVideo.isVisible = false
-
         binding.rgMode.setOnCheckedChangeListener { _, checkedId ->
             if (loadingSettings) return@setOnCheckedChangeListener
             selectedMode = when (checkedId) {
@@ -278,14 +274,9 @@ class SettingsPanel(
 
     /** Видимость карточек и опций зависит от режима: RTMP нужен только для эфира. */
     private fun updateModeDependentViews(mode: Int) {
+        // Содержимое карточки «Что запускать» меняется сразу при выборе режима.
         binding.rtmpCard.isVisible = StartMode.includesStream(mode)
-
-        val recording = StartMode.includesRecording(mode)
-        binding.splitLabel.isVisible = recording
-        binding.rgSplit.isVisible = recording
-        binding.recordBitrateLabel.isVisible = recording
-        binding.rgRecordBitrate.isVisible = recording
-        binding.recordBitrateHint.isVisible = recording
+        binding.recordOptions.isVisible = StartMode.includesRecording(mode)
     }
 
     /**
@@ -442,7 +433,7 @@ class SettingsPanel(
         if (loadingSettings) return
         val url = binding.etRtmpUrl.text?.toString()?.trim().orEmpty()
         binding.tilRtmpUrl.error = when {
-            !binding.switchBroadcast.isChecked -> null
+            !StartMode.includesStream(selectedMode) -> null
             url.isEmpty() -> context.getString(R.string.settings_error_rtmp_required)
             !SettingsRepository.isValidRtmpUrl(url) -> context.getString(R.string.settings_error_rtmp_invalid)
             else -> null

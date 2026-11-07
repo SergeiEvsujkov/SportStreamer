@@ -1756,14 +1756,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 "потолок ${bitrateAdapter.effectiveMax / 1024} кбит/с"
         )
         applyBitrateNow()
-        when {
-            status >= PowerManager.THERMAL_STATUS_CRITICAL &&
-                previous < PowerManager.THERMAL_STATUS_CRITICAL ->
-                toast(getString(R.string.main_thermal_critical))
+        // Предупреждаем только когда что-то пишется или транслируется: на пустом пульте
+        // «телефон перегрет» ничего не значит и только пугает.
+        val sessionActive = isRecordingNow || rtmpCamera2?.isStreaming == true
+        if (sessionActive) {
+            when {
+                status >= PowerManager.THERMAL_STATUS_CRITICAL &&
+                    previous < PowerManager.THERMAL_STATUS_CRITICAL ->
+                    toast(getString(R.string.main_thermal_critical))
 
-            status >= PowerManager.THERMAL_STATUS_SEVERE &&
-                previous < PowerManager.THERMAL_STATUS_SEVERE ->
-                toast(getString(R.string.main_thermal_warning))
+                status >= PowerManager.THERMAL_STATUS_SEVERE &&
+                    previous < PowerManager.THERMAL_STATUS_SEVERE ->
+                    toast(getString(R.string.main_thermal_warning))
+            }
         }
     }
 
