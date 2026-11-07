@@ -95,6 +95,10 @@
     <string name="main_recording_disabled">Сохранение в память выключено — включите его в настройках</string>
     <string name="main_bitrate_disabled">Трансляция выключена</string>
     <string name="main_bitrate_auth_error">Ошибка аутентификации</string>
+
+    <!-- Термоконтроль: система сообщает о нагреве, предупреждаем оператора. -->
+    <string name="main_thermal_warning">Телефон нагрелся — качество эфира может просесть</string>
+    <string name="main_thermal_critical">Телефон перегрет — остановите эфир или снизьте нагрузку</string>
     <string name="main_stream_started">Запуск трансляции</string>
     <string name="main_stream_stopping">Остановка трансляции</string>
     <string name="main_stream_stopped">Трансляция завершена!</string>

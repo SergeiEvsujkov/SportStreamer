@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import android.util.Range
@@ -154,6 +155,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      * а проверки по `isStreaming` блокировали переподключение.
      */
     @Volatile
+    /** Последние показания телеметрии: дропы считаем как разницу между опросами. */
+    private var lastDroppedFrames = 0L
+    private var lastTelemetryLogMs = 0L
+
+    /** Текущий термостатус устройства (Android 10+): по нему видно, греется ли телефон. */
+    private var thermalStatus = PowerManager.THERMAL_STATUS_NONE
+    private var powerManager: PowerManager? = null
+
     private var streamConnected = false
 
     /** Сколько раз поднимали поток «с нуля» после исчерпания автопереподключений библиотеки. */
@@ -226,6 +235,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         applyWindowInsets()
         setupClickListeners()
+        registerThermalMonitor()
         updateUi()
 
         if (!settings.isConfigured) {
@@ -298,6 +308,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     override fun onDestroy() {
         super.onDestroy()
         stopZoomHold()
+        powerManager?.removeThermalStatusListener(thermalListener)
         handler.removeCallbacksAndMessages(null)
 
         val camera = rtmpCamera2
@@ -1487,6 +1498,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             stats.actualBitrate / MEGABIT
         )
 
+        logTelemetry(camera)
+
         stats.newTargetBitrate?.let { newBitrate ->
             try {
                 camera.setVideoBitrateOnFly(newBitrate)
@@ -1494,6 +1507,88 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 Log.e(TAG, "Не удалось изменить битрейт на лету", e)
             }
         }
+    }
+
+    /**
+     * Телеметрия канала раз в [TELEMETRY_INTERVAL_MS].
+     *
+     * Библиотека отдаёт больше, чем битрейт: сколько кадров отправлено, сколько потеряно,
+     * сколько лежит в очереди и есть ли затор. На площадке это единственный способ отличить
+     * слабый канал от перегрева телефона — без этих строк в логе любые жалобы на качество
+     * приходится разбирать догадками.
+     */
+    private fun logTelemetry(camera: RtmpCamera2) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastTelemetryLogMs < TELEMETRY_INTERVAL_MS) return
+        lastTelemetryLogMs = now
+
+        val client = try {
+            camera.streamClient
+        } catch (e: Exception) {
+            Log.w(TAG, "Телеметрия канала недоступна", e)
+            return
+        }
+
+        val sent = runCatching { client.getSentVideoFrames() }.getOrDefault(0L)
+        val dropped = runCatching { client.getDroppedVideoFrames() }.getOrDefault(0L)
+        val cache = runCatching { client.getCacheSize() }.getOrDefault(0)
+        val congest = runCatching { client.hasCongestion(CONGESTION_PERCENT) }.getOrDefault(false)
+        val bytes = safeBytesSent(camera)
+
+        val droppedDelta = (dropped - lastDroppedFrames).coerceAtLeast(0L)
+        lastDroppedFrames = dropped
+        val total = sent + dropped
+        val dropPercent = if (total > 0) dropped * 100.0 / total else 0.0
+
+        Log.i(
+            TAG,
+            String.format(
+                Locale.US,
+                "телеметрия: цель %.2f Мбит, кадров %d, дроп %d (+%d, %.1f%%), кэш %d, " +
+                    "затор %s, отправлено %.1f МБ, термо %s",
+                bitrateAdapter.targetBitrate / MEGABIT,
+                sent,
+                dropped,
+                droppedDelta,
+                dropPercent,
+                cache,
+                if (congest) "да" else "нет",
+                bytes / MEGABIT,
+                thermalLabel(thermalStatus)
+            )
+        )
+    }
+
+    private fun thermalLabel(status: Int): String = when {
+        status >= PowerManager.THERMAL_STATUS_CRITICAL -> "критично"
+        status >= PowerManager.THERMAL_STATUS_SEVERE -> "сильный нагрев"
+        status >= PowerManager.THERMAL_STATUS_MODERATE -> "умеренный нагрев"
+        status >= PowerManager.THERMAL_STATUS_LIGHT -> "лёгкий нагрев"
+        else -> "норма"
+    }
+
+    private val thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
+        val previous = thermalStatus
+        thermalStatus = status
+        Log.i(TAG, "термостатус: ${thermalLabel(status)} ($status), было ${thermalLabel(previous)}")
+        when {
+            status >= PowerManager.THERMAL_STATUS_CRITICAL &&
+                previous < PowerManager.THERMAL_STATUS_CRITICAL ->
+                toast(getString(R.string.main_thermal_critical))
+
+            status >= PowerManager.THERMAL_STATUS_SEVERE &&
+                previous < PowerManager.THERMAL_STATUS_SEVERE ->
+                toast(getString(R.string.main_thermal_warning))
+        }
+    }
+
+    /** Подписывается на термостатус: система отдаёт его без опроса датчиков. */
+    private fun registerThermalMonitor() {
+        val manager = getSystemService(PowerManager::class.java) ?: return
+        powerManager = manager
+        thermalStatus = manager.currentThermalStatus
+        manager.addThermalStatusListener(mainExecutor, thermalListener)
+        Log.i(TAG, "термоконтроль подключён, стартовый статус: ${thermalLabel(thermalStatus)}")
     }
 
     private fun safeBytesSent(camera: RtmpCamera2): Long = try {
@@ -1732,6 +1827,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         /** Шаг и число попыток дождаться запуска GL, прежде чем подключать оверлей. */
         const val GL_READY_STEP_MS = 100L
         const val GL_READY_ATTEMPTS = 20
+
+        /** Как часто писать телеметрию канала в лог (мс). */
+        const val TELEMETRY_INTERVAL_MS = 5_000L
+
+        /** Порог заполнения очереди, выше которого библиотека считает, что канал «в заторе». */
+        const val CONGESTION_PERCENT = 20f
 
         const val MEGABIT = 1024.0 * 1024.0
 
