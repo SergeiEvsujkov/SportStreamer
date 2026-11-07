@@ -94,6 +94,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     /** Подняты ли сейчас два энкодера: эфирный 720p и записывающий 1080p. */
     private var dualEncodersActive = false
 
+    /** Слушатель переразметки панели настроек: снимаем его при закрытии, иначе он копит ссылки. */
+    private var panelLayoutListener: View.OnLayoutChangeListener? = null
+
     /** GL переведён в фоновый режим (работает без SurfaceView), пока сессия продолжается. */
     private var backgroundGl = false
 
@@ -361,6 +364,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     override fun onDestroy() {
         super.onDestroy()
         StreamService.stop(this)
+        panelLayoutListener?.let { binding.settingsHost.removeOnLayoutChangeListener(it) }
+        panelLayoutListener = null
         stopZoomHold()
         powerManager?.removeThermalStatusListener(thermalListener)
         handler.removeCallbacksAndMessages(null)
@@ -556,9 +561,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             }
         }
         applyPanelLayout()
-        binding.settingsHost.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             applyPanelLayout()
         }
+        panelLayoutListener = layoutListener
+        binding.settingsHost.addOnLayoutChangeListener(layoutListener)
         // Панель занимает весь экран, поэтому отступы системных панелей добавляем сами.
         ViewCompat.setOnApplyWindowInsetsListener(panelBinding.root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -590,6 +597,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         panel.commit()
         settingsPanel = null
         settingsPanelContainer = null
+        // Снимаем слушатель переразметки: иначе он держит уничтоженное дерево панели.
+        panelLayoutListener?.let { binding.settingsHost.removeOnLayoutChangeListener(it) }
+        panelLayoutListener = null
         settingsSession++
         binding.settingsHost.removeAllViews()
         binding.settingsHost.isVisible = false
