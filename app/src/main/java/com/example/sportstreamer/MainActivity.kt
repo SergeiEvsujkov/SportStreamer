@@ -699,7 +699,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 matchPending = matchFinishedDialog != null,
                         setsToWin = settings.setsToWin,
                         team1Name = settings.team1Name,
-                        team2Name = settings.team2Name
+                        team2Name = settings.team2Name,
+                        sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
+                        recording = isRecordingNow
                     )
                 },
                 pointHandler = { team, add ->
@@ -711,7 +713,12 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                     }
                 },
                 setDecisionHandler = { newSet -> handler.post { applyRemoteSetDecision(newSet) } },
-                matchDecisionHandler = { again -> handler.post { applyRemoteMatchDecision(again) } }
+                matchDecisionHandler = { again -> handler.post { applyRemoteMatchDecision(again) } },
+                // Как и на источнике: одна кнопка — старт или стоп с подтверждением.
+                sessionStartHandler = {
+                    handler.post { if (rtmpCamera2?.isStreaming != true && !isRecordingNow) toggleSession() }
+                },
+                sessionStopHandler = { handler.post { stopSession() } }
             ).also { it.start() }
         }
 
@@ -1093,7 +1100,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 matchPending = matchFinishedDialog != null,
                 setsToWin = settings.setsToWin,
                 team1Name = settings.team1Name,
-                team2Name = settings.team2Name
+                team2Name = settings.team2Name,
+                sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
+                recording = isRecordingNow
             )
         )
     }

@@ -35,6 +35,8 @@ object RemoteScoreProtocol {
     const val FIELD_GAME = "game"
     const val FIELD_SET_PENDING = "setPending"
     const val FIELD_MATCH_PENDING = "matchPending"
+    const val FIELD_SESSION_ACTIVE = "sessionActive"
+    const val FIELD_RECORDING = "recording"
     const val FIELD_MATCH_OVER = "matchOver"
     const val FIELD_SETS_TO_WIN = "setsToWin"
     const val FIELD_TEAM1_NAME = "team1Name"
@@ -69,7 +71,9 @@ object RemoteScoreProtocol {
         matchPending: Boolean,
         setsToWin: Int,
         team1Name: String,
-        team2Name: String
+        team2Name: String,
+        sessionActive: Boolean,
+        recording: Boolean
     ): String = JSONObject()
         .put(FIELD_CMD, CMD_STATE)
         .put(FIELD_T1, team1Score)
@@ -83,6 +87,8 @@ object RemoteScoreProtocol {
         .put(FIELD_SETS_TO_WIN, setsToWin)
         .put(FIELD_TEAM1_NAME, team1Name)
         .put(FIELD_TEAM2_NAME, team2Name)
+        .put(FIELD_SESSION_ACTIVE, sessionActive)
+        .put(FIELD_RECORDING, recording)
         .toString()
 
     /** Решение по завершённой партии: начать новую или продолжить текущую. */

@@ -23,7 +23,9 @@ class RemoteWebServer(
     private val stateProvider: () -> String,
     private val pointHandler: (team: Int, add: Boolean) -> Unit,
     private val setDecisionHandler: (newSet: Boolean) -> Unit,
-    private val matchDecisionHandler: (again: Boolean) -> Unit
+    private val matchDecisionHandler: (again: Boolean) -> Unit,
+    private val sessionStartHandler: () -> Unit,
+    private val sessionStopHandler: () -> Unit
 ) {
 
     private var serverSocket: ServerSocket? = null
@@ -83,6 +85,16 @@ class RemoteWebServer(
 
                 method == "GET" && path == "/state" ->
                     respond(client, 200, "application/json; charset=utf-8", stateProvider())
+
+                method == "POST" && path == "/session-start" -> {
+                    sessionStartHandler()
+                    respond(client, 200, "application/json; charset=utf-8", "{\"ok\":true}")
+                }
+
+                method == "POST" && path == "/session-stop" -> {
+                    sessionStopHandler()
+                    respond(client, 200, "application/json; charset=utf-8", "{\"ok\":true}")
+                }
 
                 method == "POST" && path == "/set-decision" -> {
                     setDecisionHandler(query["newSet"] == "1" || query["newSet"] == "true")
@@ -189,10 +201,12 @@ class RemoteWebServer(
     <button class="minus" onclick="point(2,0)">−1</button>
   </div>
 </div>
+<div id="session"></div>
 <div id="decision"></div>
 <div id="status">—</div>
 <style>
-  #decision { padding:0 16px 16px; }
+  #session, #decision { padding:0 16px 16px; }
+  #session button { background:#1b5e20; }
   #decision button { margin-bottom:8px; }
 </style>
 <script>
@@ -202,6 +216,12 @@ async function post(path) {
     await fetch(path + '&t=' + encodeURIComponent(t), {method:'POST'});
     await tick();
   } catch (e) { el('status').textContent = 'нет связи с источником'; }
+}
+function sessionButton() {
+  if (!s.sessionActive) {
+    return '<button onclick="post(\'/session-start\')">Начать</button>';
+  }
+  return '<button onclick="if (confirm(\'Остановить трансляцию и запись?\')) post(\'/session-stop\')">Остановить</button>';
 }
 function decisionButton(label, path) {
   return '<button onclick="post(\'' + path + '\')">' + label + '</button>';
@@ -217,10 +237,13 @@ async function tick() {
   try {
     const r = await fetch('/state?t=' + encodeURIComponent(t), {cache:'no-store'});
     const s = await r.json();
+    window.s = s;
     el('n1').textContent = s.team1Name || 'Команда 1';
     el('n2').textContent = s.team2Name || 'Команда 2';
     el('score').textContent = 'Партии ' + s.s1 + ':' + s.s2 +
         ' · счёт ' + s.t1 + ':' + s.t2 + ' · партия ' + s.game + ' из ' + (s.setsToWin*2-1);
+    el('session').innerHTML = sessionButton();
+
     const d = el('decision');
     if (s.setPending) {
       d.innerHTML = decisionButton('Новая партия', '/set-decision?newSet=1') +
