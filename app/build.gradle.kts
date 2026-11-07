@@ -11,7 +11,10 @@ android {
     defaultConfig {
         applicationId = "com.example.sportstreamer"
         minSdk = 29
-        targetSdk = 37
+        // Новый DSL: targetSdk задаётся блоком, как compileSdk.
+        targetSdk {
+            version = release(37)
+        }
         versionCode = 3
         versionName = "1.2"
 
