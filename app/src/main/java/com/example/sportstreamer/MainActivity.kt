@@ -405,63 +405,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /**
-     * Переход в настройки с подтверждением.
-     *
-     * Если идёт запись и/или трансляция — сначала спрашиваем. По подтверждению останавливаем их
-     * ровно теми же обработчиками, что кнопки (`toggleRecording()` / `toggleBroadcast()`), ждём
-     * фактического завершения (файл закрыт и опубликован, эфир прекращён) и только затем открываем
-     * экран настроек. Иначе `onPause()` оборвал бы запись «на полуслове».
-     */
-    private fun confirmOpenSettings() {
-        val recording = isRecordingNow
-        val streaming = rtmpCamera2?.isStreaming == true
-        if (!recording && !streaming) {
-            openSettingsScreen()
-            return
-        }
-
-        val titleRes = when {
-            recording && streaming -> R.string.main_leave_settings_title_both
-            recording -> R.string.main_leave_settings_title_recording
-            else -> R.string.main_leave_settings_title_stream
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setMessage(getString(R.string.main_leave_settings_message))
-            .setPositiveButton(R.string.main_leave_settings_positive) { _, _ -> stopThenOpenSettings() }
-            .setNegativeButton(R.string.main_leave_settings_negative, null)
-            .show()
-    }
-
-    /** Останавливает запись и эфир как кнопками и ждёт, пока всё действительно завершится. */
-    private fun stopThenOpenSettings() {
-        if (isRecordingNow) toggleRecording()
-        if (rtmpCamera2?.isStreaming == true) toggleBroadcast()
-        awaitStopsThenOpenSettings(attempt = 0)
-    }
-
-    /**
-     * Ждёт завершения остановки: файл записи закрыт и опубликован (`isRecordingNow == false`),
-     * трансляция прекращена (`camera.isStreaming == false`). Проверка каждые
-     * [SETTINGS_WAIT_STEP_MS], предохранитель — [SETTINGS_WAIT_ATTEMPTS].
-     */
-    private fun awaitStopsThenOpenSettings(attempt: Int) {
-        val stillRecording = isRecordingNow
-        val stillStreaming = rtmpCamera2?.isStreaming == true
-        if ((!stillRecording && !stillStreaming) || attempt >= SETTINGS_WAIT_ATTEMPTS) {
-            openSettingsScreen()
-            return
-        }
-        handler.postDelayed({
-            if (!isFinishing && !isDestroyed) awaitStopsThenOpenSettings(attempt + 1)
-        }, SETTINGS_WAIT_STEP_MS)
-    }
-
-    private fun openSettingsScreen() {
-        showSettingsPanel()
-    }
-
-    /**
      * Раскладывает панель как портретный экран внутри ландшафтного окна.
      *
      * Локальные размеры: ширина = высоте окна, высота = ширине окна. После поворота на 90°
@@ -2059,10 +2002,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         const val RETRY_DELAY_MS = 5000L
 
         /** Шаг проверки завершения остановки записи и эфира перед переходом в настройки. */
-        const val SETTINGS_WAIT_STEP_MS = 100L
 
         /** Предохранитель: 30 × 100 мс = 3 с, после чего настройки открываются в любом случае. */
-        const val SETTINGS_WAIT_ATTEMPTS = 30
 
         /** Прозрачность кнопки, режим которой выключен в настройках (кнопка остаётся кликабельной). */
         const val DISABLED_ALPHA = 0.4f
