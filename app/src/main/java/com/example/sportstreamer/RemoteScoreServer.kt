@@ -35,7 +35,12 @@ class RemoteScoreServer(
     private val main = Handler(Looper.getMainLooper())
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private var serverSocket: ServerSocket? = null
+    // @Volatile обязателен: поля пишет поток сервера, а читает главный поток
+    // (рассылка состояния). Без этого он мог увидеть null и «потерять» первый пакет.
+    @Volatile
     private var client: Socket? = null
+
+    @Volatile
     private var clientWriter: OutputStreamWriter? = null
     @Volatile
     private var running = false
