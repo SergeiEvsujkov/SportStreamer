@@ -886,8 +886,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         //    `prepareVideo()` останавливает текущий, поэтому первое включение записи
         //    во время эфира перезапускает поток на пару секунд;
         //  • «только запись» — один энкодер 1080p с битрейтом записи.
-        val dual = forceDualEncoders && settings.saveVideoLocally
-        dualEncodersActive = dual
+        // Как в SportCam: один видеокодер на всё. Запись пакует тот же поток кадров,
+        // поэтому второй энкодер не нужен, а значит нет и пересборок GL на ходу —
+        // именно они давали чёрный кадр.
+        val dual = false
+        dualEncodersActive = false
         // Потолок зависит от разрешения эфира: 720p не нужны 1080p-мегабиты,
         // а каждый лишний мегабит — это лишний нагрев телефона.
         bitrateAdapter.maxBitrate = if (dual) {
@@ -1321,11 +1324,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
      */
     private fun startRecording() {
         val camera = rtmpCamera2 ?: return
-        if (camera.isStreaming && !dualEncodersActive) {
-            // Эфир идёт с одним энкодером (режим «только эфир»): чтобы писать 1080p своим
-            // битрейтом, нужен второй. RootEncoder не добавляет его на ходу — перезапускаем поток.
-            switchToDualEncodersAndRecord()
-            return
+        if (camera.isStreaming) {
+            // Эфир уже идёт — кодировщик общий, поэтому достаточно открыть муксер.
+            // Никакой пересборки GL, никакого второго кодека: файл получит качество эфира.
+            Log.i(TAG, "Запись во время эфира: пишу текущим энкодером (качество эфира)")
         }
         if (!camera.isStreaming) {
             if (!prepareEncoders(forStream = false)) {
@@ -1365,32 +1367,6 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // GL остановлен, камера закрыта. Возвращаем превью и оверлей без лишней паузы.
         if (rtmpCamera2?.isStreaming != true) restorePreviewSoon()
         updateUi()
-    }
-
-    /**
-     * Включает второй энкодер (1080p) во время эфира и сразу начинает запись.
-     *
-     * RootEncoder не умеет добавлять энкодер на ходу: `prepareVideo()` останавливает текущий,
-     * поэтому поток поднимается заново — это стоит 1–2 секунды эфира. Зато в режиме «только
-     * эфир» телефон не кодирует второй поток вхолостую и меньше греется.
-     */
-    private fun switchToDualEncodersAndRecord() {
-        if (!settings.saveVideoLocally) return
-        Log.i(TAG, "Включаю второй энкодер записи: эфир перезапустится на 1–2 секунды")
-        toast(getString(R.string.main_dual_switch))
-        forceDualEncoders = true
-        try {
-            stopStreamOnly()
-            startBroadcast()
-        } finally {
-            forceDualEncoders = false
-        }
-        if (dualEncodersActive && rtmpCamera2?.isStreaming == true) {
-            startRecording()
-        } else {
-            Log.w(TAG, "Переключение на два энкодера не удалось — запись не начата")
-            toast(getString(R.string.main_recording_failed))
-        }
     }
 
     private fun startBroadcast() {
