@@ -393,13 +393,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:backgroundTint="?attr/colorPrimary"
+                android:backgroundTint="@color/record_button"
                 android:contentDescription="@string/desc_toggle_stream"
                 app:fabCustomSize="40dp"
                 app:fabSize="normal"
                 app:maxImageSize="20dp"
-                app:srcCompat="@drawable/ic_link"
-                app:tint="?attr/colorOnPrimary" />
+                app:srcCompat="@drawable/ic_record"
+                app:tint="@color/white" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/recordBtn"
