@@ -655,6 +655,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
             override fun onClientConnected() {
                 toast(getString(R.string.remote_connected))
+                // Пульт мог подключиться к идущему матчу: сразу отдаём текущий счёт,
+                // иначе он не узнает о нём до первого изменения.
+                broadcastRemoteState()
             }
 
             override fun onClientDisconnected() {
