@@ -213,7 +213,9 @@ class RemoteWebServer(
 const t = new URLSearchParams(location.search).get('t') || '';
 async function post(path) {
   try {
-    await fetch(path + '&t=' + encodeURIComponent(t), {method:'POST'});
+    // У путей может не быть '?': тогда код добавляется через '?', иначе через '&'.
+    const sep = path.indexOf('?') === -1 ? '?' : '&';
+    await fetch(path + sep + 't=' + encodeURIComponent(t), {method:'POST'});
     await tick();
   } catch (e) { el('status').textContent = 'нет связи с источником'; }
 }
