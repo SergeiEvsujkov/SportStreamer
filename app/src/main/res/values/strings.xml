@@ -7,6 +7,9 @@
     <string name="update_available_message">Вышла новая версия приложения с исправлениями. Обновить сейчас?</string>
     <string name="update_available_yes">Обновить</string>
     <string name="update_available_later">Позже</string>
+    <string name="main_stream_url_missing_title">Не задан адрес трансляции</string>
+    <string name="main_stream_url_missing_open">Открыть настройки</string>
+    <string name="main_stream_url_missing_later">Позже</string>
     <string name="settings_support_title">Нравится приложение?</string>
     <string name="settings_support_subtitle">Помоги развитию — поддержи проект.</string>
     <string name="settings_support_button">Поддержать проект</string>

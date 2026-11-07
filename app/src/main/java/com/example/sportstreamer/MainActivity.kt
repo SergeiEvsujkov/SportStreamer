@@ -1874,8 +1874,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         val camera = rtmpCamera2 ?: return
         val url = settings.fullRtmpUrl
         if (url.isBlank()) {
-            toast(getString(R.string.main_stream_url_missing))
-            showSettingsPanel()
+            // Не уводим пользователя в настройки силой: предлагаем перейти, решение за ним.
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.main_stream_url_missing_title)
+                .setMessage(R.string.main_stream_url_missing)
+                .setPositiveButton(R.string.main_stream_url_missing_open) { _, _ -> showSettingsPanel() }
+                .setNegativeButton(R.string.main_stream_url_missing_later, null)
+                .show()
             return
         }
 
