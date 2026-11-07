@@ -364,6 +364,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     override fun onDestroy() {
         super.onDestroy()
         StreamService.stop(this)
+        remoteServer?.stop()
+        remoteServer = null
         panelLayoutListener?.let { binding.settingsHost.removeOnLayoutChangeListener(it) }
         panelLayoutListener = null
         stopZoomHold()
@@ -402,6 +404,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         binding.streamBtn.setOnClickListener(null)
         binding.recordBtn.setOnClickListener(null)
+        binding.remoteBtn.setOnClickListener(null)
         binding.settingsBtn.setOnClickListener(null)
         binding.fullscreenBtn.setOnClickListener(null)
         binding.collapseBtn.setOnClickListener(null)
@@ -444,6 +447,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         binding.zoomInBtn.setOnTouchListener { _, event -> handleZoomTouch(event, 1) }
         binding.zoomOutBtn.setOnTouchListener { _, event -> handleZoomTouch(event, -1) }
+        binding.remoteBtn.setOnClickListener { showRemoteDialog() }
         binding.settingsBtn.setOnClickListener { showSettingsPanel() }
     }
 
@@ -592,6 +596,69 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Закрывает панель и применяет изменившиеся настройки к пульту. */
+    /** Сервер удалённого пульта: работает, пока открыт диалог сопряжения. */
+    private var remoteServer: RemoteScoreServer? = null
+
+    /**
+     * Показывает адрес и код для второго телефона и принимает с него команды счёта.
+     *
+     * Пока диалог открыт, сервер слушает порт; при закрытии — останавливается.
+     */
+    private fun showRemoteDialog() {
+        if (remoteServer != null) return
+        val pin = RemoteScoreProtocol.generatePin()
+        val address = localIpAddress()
+        val server = RemoteScoreServer(pin, object : RemoteScoreServer.Listener {
+            override fun onPoint(team: Int, add: Boolean) {
+                onPoint(if (team == 1) ScoreEngine.Team.FIRST else ScoreEngine.Team.SECOND, add)
+            }
+
+            override fun onUndo() {
+                Log.i(TAG, "Пульт: отмена не поддерживается и игнорируется")
+            }
+
+            override fun onClientConnected() {
+                toast(getString(R.string.remote_connected))
+            }
+
+            override fun onClientDisconnected() {
+                toast(getString(R.string.remote_disconnected))
+            }
+        })
+        remoteServer = server
+        server.start()
+
+        val message = if (address == null) {
+            getString(R.string.remote_no_address, pin)
+        } else {
+            getString(R.string.remote_dialog_message, "$address:${RemoteScoreProtocol.PORT}", pin)
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.remote_dialog_title)
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok, null)
+            .setOnDismissListener {
+                remoteServer?.stop()
+                remoteServer = null
+            }
+            .show()
+    }
+
+    /** Адрес телефона в локальной сети: первый IPv4, не относящийся к loopback. */
+    private fun localIpAddress(): String? = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList().asSequence() }
+            .filterIsInstance<java.net.Inet4Address>()
+            .firstOrNull { !it.isLoopbackAddress }
+            ?.hostAddress
+    } catch (e: Exception) {
+        Log.w(TAG, "Не удалось определить локальный адрес", e)
+        null
+    }
+
     private fun hideSettingsPanel() {
         val panel = settingsPanel ?: return
         panel.commit()

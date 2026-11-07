@@ -167,5 +167,13 @@
     <string name="stop_confirm_yes">Остановить</string>
     <string name="stop_confirm_no">Продолжить</string>
 
+    <!-- Удалённый пульт -->
+    <string name="desc_remote_control">Удалённый пульт счёта</string>
+    <string name="remote_dialog_title">Удалённый пульт</string>
+    <string name="remote_dialog_message">На втором телефоне откройте SportStreamer → «Удалённый пульт» и введите:\n\nАдрес: %1$s\nКод: %2$s\n\nТелефоны должны быть в одной сети Wi-Fi или подключены к точке доступа этого телефона.</string>
+    <string name="remote_no_address">Не удалось определить адрес в сети. Подключите телефон к Wi-Fi и откройте заново.\n\nКод: %1$s</string>
+    <string name="remote_connected">Пульт подключён</string>
+    <string name="remote_disconnected">Пульт отключён</string>
+
 </resources>
 
