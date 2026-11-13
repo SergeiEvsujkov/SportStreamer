@@ -201,10 +201,18 @@ class ScoreOverlay(
             )
         }
         if (previous?.team1Score != state.team1Score) {
-            scoreFirstTeam.setText(state.team1Score.toString(), SCORE_TEXT_SIZE, TEXT_COLOR)
+            scoreFirstTeam.setText(
+                state.team1Score.toString().padStart(SCORE_CHARS, '0'),
+                SCORE_TEXT_SIZE,
+                TEXT_COLOR
+            )
         }
         if (previous?.team2Score != state.team2Score) {
-            scoreSecondTeam.setText(state.team2Score.toString(), SCORE_TEXT_SIZE, TEXT_COLOR)
+            scoreSecondTeam.setText(
+                state.team2Score.toString().padStart(SCORE_CHARS, '0'),
+                SCORE_TEXT_SIZE,
+                TEXT_COLOR
+            )
         }
         if (previous?.team1Sets != state.team1Sets) {
             setFirstTeam.setText(state.team1Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
