@@ -102,9 +102,6 @@ class ScoreOverlay(
      */
     private var logoApplied = false
 
-    /** Сколько партий было при последней установке картинки плашки. */
-    private var plaqueSets = -1
-
     /** Какие цвета уже наложены на полосы, чтобы не перекрашивать их на каждый attach. */
     private var team1ColorApplied: Int? = null
     private var team2ColorApplied: Int? = null
@@ -116,61 +113,14 @@ class ScoreOverlay(
      */
     private var appliedState: State? = null
 
-    /** Картинка плашки под число сыгранных партий: у каждой партии своя плитка. */
-    private fun plaqueDrawable(sets: Int): Int = when (sets) {
-        0, 1 -> R.drawable.score_title
-        2 -> R.drawable.score_title_2
-        3 -> R.drawable.score_title_3
-        4 -> R.drawable.score_title_4
-        else -> R.drawable.score_title_5
-    }
-
-    /**
-     * Ставит картинку плашки под число партий.
-     *
-     * Декодируем каждый раз заново: после загрузки текстуры библиотека вызывает
-     * `bitmap.recycle()`, и сохранённый битмап ко второй установке уже непригоден.
-     * Геометрию применяем после `setImage` и в порядке scale → position — иначе плашка уедет.
-     */
-    private fun applyPlaque(sets: Int) {
-        if (sets == plaqueSets) return
-        val bitmap = BitmapFactory.decodeResource(resources, plaqueDrawable(sets))
+    /** Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает. */
+    private fun applyLogoImage() {
+        val bitmap = BitmapFactory.decodeResource(resources, R.drawable.score_title)
         if (bitmap == null) {
-            Log.w(TAG, "Плашка ${plaqueDrawable(sets)} недоступна — оверлей без плашки")
+            Log.w(TAG, "Логотип score_title недоступен — оверлей без логотипа")
             return
         }
         logoFilter.setImage(bitmap)
-        logoFilter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
-        logoFilter.setPosition(LOGO_X, LOGO_Y)
-        plaqueSets = sets
-        logoApplied = true
-        // Текстура загружается при добавлении фильтра в GL (initGl), поэтому одного
-        // setImage недостаточно: пересобираем фильтры заново в правильном порядке.
-        reattachFilters()
-    }
-
-    /**
-     * Снимает и заново добавляет фильтры в GL.
-     *
-     * Порядок важен: плашка, затем полосы, затем надписи — иначе плашка перекроет текст.
-     * Колонки счёта партий после пересборки добавляются заново из [updateSetColumns].
-     */
-    private fun reattachFilters() {
-        val state = appliedState ?: return
-        if (!attached) return
-
-        camera.glInterface.removeFilter(logoFilter)
-        camera.glInterface.removeFilter(stripTeam1Filter)
-        camera.glInterface.removeFilter(stripTeam2Filter)
-        textFilters.forEach { camera.glInterface.removeFilter(it) }
-        for (i in 0 until historyShown) removeHistoryAt(i)
-        historyShown = 0
-
-        imageFilters.forEach { camera.glInterface.addFilter(it) }
-        textFilters.forEach { camera.glInterface.addFilter(it) }
-        applyGeometry()
-        appliedState = null
-        updateTexts(state)
     }
 
     /**
@@ -194,7 +144,6 @@ class ScoreOverlay(
         team1ColorApplied = null
         team2ColorApplied = null
         logoApplied = false
-        plaqueSets = -1
         historyShown = 0
     }
 
@@ -225,7 +174,8 @@ class ScoreOverlay(
             team2ColorApplied = team2Color
         }
         if (reattached || !logoApplied) {
-            applyPlaque(state.team1Sets + state.team2Sets)
+            applyLogoImage()
+            logoApplied = true
         }
 
         applyGeometry()
@@ -270,7 +220,6 @@ class ScoreOverlay(
 
         // Колонка текущей партии показывает живой счёт, поэтому обновляем на каждое изменение.
         updateSetColumns(state)
-        applyPlaque(state.team1Sets + state.team2Sets)
 
         appliedState = state
     }
