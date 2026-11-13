@@ -270,12 +270,12 @@ class ScoreOverlay(
         }
         // Никогда не пустая строка: в списке гарантированно есть хотя бы одна партия.
         historyFirstTeam.setText(
-            scores.joinToString(" ") { it.team1.toString() },
+            scores.asReversed().joinToString(" ") { "%02d".format(it.team1) },
             HISTORY_TEXT_SIZE,
             TEXT_COLOR
         )
         historySecondTeam.setText(
-            scores.joinToString(" ") { it.team2.toString() },
+            scores.asReversed().joinToString(" ") { "%02d".format(it.team2) },
             HISTORY_TEXT_SIZE,
             TEXT_COLOR
         )
@@ -364,9 +364,9 @@ class ScoreOverlay(
         const val SET_TEXT_SIZE = 2000f
 
         /** Строка со счётом партий: сдвиг по X, растяжение и размер шрифта. */
-        const val HISTORY_X = 27f
+        const val HISTORY_X = 21f
         const val HISTORY_SCALE_X = 2f
-        const val HISTORY_TEXT_SIZE = 1200f
+        const val HISTORY_TEXT_SIZE = 800f
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
