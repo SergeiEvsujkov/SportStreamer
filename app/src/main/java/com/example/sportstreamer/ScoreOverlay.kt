@@ -144,6 +144,33 @@ class ScoreOverlay(
         logoFilter.setPosition(LOGO_X, LOGO_Y)
         plaqueSets = sets
         logoApplied = true
+        // Текстура загружается при добавлении фильтра в GL (initGl), поэтому одного
+        // setImage недостаточно: пересобираем фильтры заново в правильном порядке.
+        reattachFilters()
+    }
+
+    /**
+     * Снимает и заново добавляет фильтры в GL.
+     *
+     * Порядок важен: плашка, затем полосы, затем надписи — иначе плашка перекроет текст.
+     * Колонки счёта партий после пересборки добавляются заново из [updateSetColumns].
+     */
+    private fun reattachFilters() {
+        val state = appliedState ?: return
+        if (!attached) return
+
+        camera.glInterface.removeFilter(logoFilter)
+        camera.glInterface.removeFilter(stripTeam1Filter)
+        camera.glInterface.removeFilter(stripTeam2Filter)
+        textFilters.forEach { camera.glInterface.removeFilter(it) }
+        for (i in 0 until historyShown) removeHistoryAt(i)
+        historyShown = 0
+
+        imageFilters.forEach { camera.glInterface.addFilter(it) }
+        textFilters.forEach { camera.glInterface.addFilter(it) }
+        applyGeometry()
+        appliedState = null
+        updateTexts(state)
     }
 
     /**
