@@ -1034,8 +1034,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 matchFinishedDialog = null
                 onMatchChanged()
             }
-            .setNegativeButton(R.string.main_match_finished_negative) { dialogView, _ ->
+            .setNeutralButton(R.string.main_match_finished_negative) { _, _ ->
+                // Отмена последней партии возвращает матч в игру.
                 engine.rollbackLastSet()
+                matchFinishedDialog = null
+                onMatchChanged()
+            }
+            .setNegativeButton(R.string.main_match_finished_close) { dialogView, _ ->
+                // Просто закрыть: матч остаётся завершённым, счёт и история сохраняются.
                 matchFinishedDialog = null
                 dialogView.dismiss()
                 onMatchChanged()

@@ -103,6 +103,7 @@
     <string name="main_match_finished_title">Матч завершён</string>
     <string name="main_match_finished_message">Победитель: %1$s\nСчёт по партиям: %2$d : %3$d</string>
     <string name="main_match_finished_positive">Новая игра</string>
+    <string name="main_match_finished_close">Закрыть</string>
     <string name="main_match_finished_negative">Отменить партию</string>
     <string name="main_bitrate_stats">Целевой: %1$.2f · факт: %2$.2f Mbps</string>
     <string name="main_recording_disabled">Сохранение в память выключено — включите его в настройках</string>
