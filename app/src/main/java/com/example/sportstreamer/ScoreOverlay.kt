@@ -386,7 +386,7 @@ class ScoreOverlay(
 
         /** Первая партия стоит здесь и не двигается; следующие идут правее с этим шагом. */
         const val HISTORY_FIRST_X = 24.5f
-        const val HISTORY_STEP_X = 3.5f
+        const val HISTORY_STEP_X = 2.7f
         const val HISTORY_SCALE_X = 2f
         const val HISTORY_TEXT_SIZE = 2000f
 
