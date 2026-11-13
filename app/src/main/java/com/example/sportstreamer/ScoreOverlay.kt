@@ -118,10 +118,11 @@ class ScoreOverlay(
 
     /** Картинка плашки под число сыгранных партий. */
     private fun plaqueDrawable(sets: Int): Int = when (sets) {
-        0, 1 -> R.drawable.score_title
-        2 -> R.drawable.score_title_2
-        3 -> R.drawable.score_title_3
-        4 -> R.drawable.score_title_4
+        // Плиток на картинке = колонок на табло = сыгранные партии + текущая.
+        0 -> R.drawable.score_title      // одна плитка: идёт первая партия
+        1 -> R.drawable.score_title_2    // две: закрытая + текущая
+        2 -> R.drawable.score_title_3
+        3 -> R.drawable.score_title_4
         else -> R.drawable.score_title_5
     }
 
