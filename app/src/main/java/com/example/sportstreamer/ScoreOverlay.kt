@@ -228,9 +228,8 @@ class ScoreOverlay(
             setSecondTeam.setText(state.team2Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
         }
 
-        if (previous?.setScores != state.setScores) {
-            updateHistoryTexts(state.setScores)
-        }
+        // Колонка текущей партии показывает живой счёт, поэтому обновляем на каждое изменение.
+        updateSetColumns(state)
 
         appliedState = state
     }
@@ -252,11 +251,17 @@ class ScoreOverlay(
      * Показывает счёт партий. Пока партий нет — надписей в GL нет: пустая строка ломает
      * `TextObjectFilterRender.setText` (битмап нулевой ширины).
      */
-    private fun updateHistoryTexts(scores: List<ScoreEngine.SetScore>) {
-        val target = scores.size.coerceAtMost(MAX_SETS)
+    /**
+     * Колонки счёта по партиям.
+     *
+     * Колонок столько, сколько партий уже начато: завершённые берутся из истории, а последняя
+     * показывает живой счёт идущей партии и обновляется на каждое очко — как табло на площадке.
+     */
+    private fun updateSetColumns(state: State) {
+        val finished = state.setScores
+        val target = (finished.size + 1).coerceAtMost(MAX_SETS)
 
         if (target == 0) {
-            // Партий нет — надписей в GL нет: пустая строка ломает setText.
             while (historyShown > 0) {
                 historyShown--
                 removeHistoryAt(historyShown)
@@ -274,12 +279,14 @@ class ScoreOverlay(
             historyShown++
         }
 
-        // ВАЖНО: сначала setText, потом геометрия.
-        // setText() пересоздаёт текстуру под размер строки и сбрасывает масштаб с позицией,
-        // поэтому place() до него приводил к тому, что все партии рисовались в одном месте.
         for (i in 0 until target) {
-            historyFirstTeam[i].setText("%02d".format(scores[i].team1), HISTORY_TEXT_SIZE, TEXT_COLOR)
-            historySecondTeam[i].setText("%02d".format(scores[i].team2), HISTORY_TEXT_SIZE, TEXT_COLOR)
+            val firstIsLive = i == finished.size
+            val first = if (firstIsLive) state.team1Score else finished[i].team1
+            val second = if (firstIsLive) state.team2Score else finished[i].team2
+
+            // ВАЖНО: сначала setText (он сбрасывает геометрию), потом позиция.
+            historyFirstTeam[i].setText("%02d".format(first), HISTORY_TEXT_SIZE, TEXT_COLOR)
+            historySecondTeam[i].setText("%02d".format(second), HISTORY_TEXT_SIZE, TEXT_COLOR)
 
             val x = HISTORY_FIRST_X + i * HISTORY_STEP_X
             place(historyFirstTeam[i], x, ROW_TEAM1_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
@@ -379,7 +386,7 @@ class ScoreOverlay(
         const val MAX_SETS = 5
 
         /** Первая партия стоит здесь и не двигается; следующие идут правее с этим шагом. */
-        const val HISTORY_FIRST_X = 25.5f
+        const val HISTORY_FIRST_X = 28f
         const val HISTORY_STEP_X = 9f
         const val HISTORY_SCALE_X = 1f
         const val HISTORY_TEXT_SIZE = 1200f
