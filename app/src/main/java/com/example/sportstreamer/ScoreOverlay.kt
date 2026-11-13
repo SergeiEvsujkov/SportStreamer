@@ -77,7 +77,7 @@ class ScoreOverlay(
         setSecondTeam
     )
 
-    private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter, historyFilter)
+    private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter)
 
     /** Добавлены ли фильтры в GL-интерфейс: это делается один раз за активити. */
     private var attached = false
@@ -201,18 +201,10 @@ class ScoreOverlay(
             )
         }
         if (previous?.team1Score != state.team1Score) {
-            scoreFirstTeam.setText(
-                state.team1Score.toString().padStart(SCORE_CHARS, '0'),
-                SCORE_TEXT_SIZE,
-                TEXT_COLOR
-            )
+            scoreFirstTeam.setText(state.team1Score.toString(), SCORE_TEXT_SIZE, TEXT_COLOR)
         }
         if (previous?.team2Score != state.team2Score) {
-            scoreSecondTeam.setText(
-                state.team2Score.toString().padStart(SCORE_CHARS, '0'),
-                SCORE_TEXT_SIZE,
-                TEXT_COLOR
-            )
+            scoreSecondTeam.setText(state.team2Score.toString(), SCORE_TEXT_SIZE, TEXT_COLOR)
         }
         if (previous?.team1Sets != state.team1Sets) {
             setFirstTeam.setText(state.team1Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
@@ -277,21 +269,10 @@ class ScoreOverlay(
      * на половину прироста (позиция спрайта задаёт его центр).
      */
     private fun applyHistory(scores: List<ScoreEngine.SetScore>) {
-        val columns = scores.size
-        val grownScale = LOGO_SCALE_X + columns * HISTORY_STEP_X
-        logoFilter.setScale(grownScale, LOGO_SCALE_Y)
-        logoFilter.setPosition(LOGO_X + (grownScale - LOGO_SCALE_X) / 2f, LOGO_Y)
-
-        if (columns == 0) {
-            // Пустая история — прячем таблицу полностью: прозрачная точка вместо картинки.
-            historyFilter.setImage(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
-            return
-        }
-
-        historyFilter.setImage(drawHistoryBitmap(scores))
-        val width = columns * HISTORY_CELL_SCALE_X
-        historyFilter.setScale(width, HISTORY_CELL_SCALE_Y)
-        historyFilter.setPosition(HISTORY_X + width / 2f, HISTORY_Y)
+        // ОТКАТ: плашка остаётся в исходном состоянии, растяжения нет.
+        // Таблица партий временно не рисуется — её разместим в розовом блоке отдельным шагом.
+        logoFilter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
+        logoFilter.setPosition(LOGO_X, LOGO_Y)
     }
 
     /** Таблица в две строки: верхняя — первая команда, нижняя — вторая. */
