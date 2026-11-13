@@ -147,8 +147,9 @@ class ScoreOverlay(
         val density = resources.displayMetrics.density
         val baseWidth = BASE_PLAQUE_WIDTH_PX * density
         val scaleX = LOGO_SCALE_X * bitmap.width / baseWidth
+        // Позиция — это левый край, а не центр: компенсация сдвигала плашку вправо.
         logoFilter.setScale(scaleX, LOGO_SCALE_Y)
-        logoFilter.setPosition(LOGO_X + (scaleX - LOGO_SCALE_X) / 2f, LOGO_Y)
+        logoFilter.setPosition(LOGO_X, LOGO_Y)
 
         Log.i(TAG, "плашка: sets=$sets, res=$resId, bmp=${bitmap.width}x${bitmap.height}, scaleX=$scaleX")
     }
