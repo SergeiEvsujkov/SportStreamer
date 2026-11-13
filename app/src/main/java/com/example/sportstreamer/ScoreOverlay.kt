@@ -372,10 +372,10 @@ class ScoreOverlay(
         const val MAX_SETS = 5
 
         /** Первая партия стоит здесь и не двигается; следующие идут правее с этим шагом. */
-        const val HISTORY_FIRST_X = 28f
-        const val HISTORY_STEP_X = 9f
-        const val HISTORY_SCALE_X = 1f
-        const val HISTORY_TEXT_SIZE = 1200f
+        const val HISTORY_FIRST_X = 24.5f
+        const val HISTORY_STEP_X = 6f
+        const val HISTORY_SCALE_X = 2f
+        const val HISTORY_TEXT_SIZE = 2000f
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
