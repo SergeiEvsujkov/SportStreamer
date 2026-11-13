@@ -269,8 +269,19 @@ class ScoreOverlay(
 
         for (i in 0 until target) {
             val firstIsLive = i == finished.size
-            val first = if (firstIsLive) state.team1Score else finished[i].team1
-            val second = if (firstIsLive) state.team2Score else finished[i].team2
+            // Пока оператор не нажал «Новая партия», очки на табло принадлежат только что
+            // закрытой партии: новая колонка должна быть 00:00, а не повторять её счёт.
+            val liveStarted = !state.awaitingNextSet
+            val first = when {
+                !firstIsLive -> finished[i].team1
+                liveStarted -> state.team1Score
+                else -> 0
+            }
+            val second = when {
+                !firstIsLive -> finished[i].team2
+                liveStarted -> state.team2Score
+                else -> 0
+            }
 
             // ВАЖНО: сначала setText (он сбрасывает геометрию), потом позиция.
             historyFirstTeam[i].setText("%02d".format(first), HISTORY_TEXT_SIZE, TEXT_COLOR)
