@@ -1107,7 +1107,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         team1Score = engine.team1Score,
         team2Score = engine.team2Score,
         team1Sets = engine.team1Sets,
-        team2Sets = engine.team2Sets
+        team2Sets = engine.team2Sets,
+        setScores = engine.setHistory
     )
 
     private fun updateUi() {

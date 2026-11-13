@@ -45,7 +45,9 @@ class ScoreOverlay(
         val team1Score: Int,
         val team2Score: Int,
         val team1Sets: Int,
-        val team2Sets: Int
+        val team2Sets: Int,
+        /** Счёт завершённых партий по порядку: 25:23, 22:25 … */
+        val setScores: List<ScoreEngine.SetScore> = emptyList()
     )
 
     // --- Фильтры создаются один раз, при создании объекта (то есть при открытии активити). ---
@@ -55,6 +57,18 @@ class ScoreOverlay(
     private val scoreSecondTeam = TextObjectFilterRender()
     private val setFirstTeam = TextObjectFilterRender()
     private val setSecondTeam = TextObjectFilterRender()
+
+    /** Счёт сыгранных партий: отдельная строка на каждую команду. */
+    private val historyFirstTeam = TextObjectFilterRender()
+    private val historySecondTeam = TextObjectFilterRender()
+
+    /**
+     * Добавлены ли строки со счётом партий в GL.
+     *
+     * Пустую строку нельзя отдать в `setText`: библиотека создаёт битмап нулевой ширины
+     * и падает. Пока партий нет, этих надписей в GL нет вообще.
+     */
+    private var historyAttached = false
 
     private val logoFilter = ImageObjectFilterRender()
     private val stripTeam1Filter = ImageObjectFilterRender()
@@ -126,6 +140,7 @@ class ScoreOverlay(
         team1ColorApplied = null
         team2ColorApplied = null
         logoApplied = false
+        historyAttached = false
     }
 
     /**
@@ -213,6 +228,10 @@ class ScoreOverlay(
             setSecondTeam.setText(state.team2Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
         }
 
+        if (previous?.setScores != state.setScores) {
+            updateHistoryTexts(state.setScores)
+        }
+
         appliedState = state
     }
 
@@ -226,6 +245,40 @@ class ScoreOverlay(
     fun detach() {
         attached = false
         appliedState = null
+        historyAttached = false
+    }
+
+    /**
+     * Показывает счёт партий. Пока партий нет — надписей в GL нет: пустая строка ломает
+     * `TextObjectFilterRender.setText` (битмап нулевой ширины).
+     */
+    private fun updateHistoryTexts(scores: List<ScoreEngine.SetScore>) {
+        if (scores.isEmpty()) {
+            if (historyAttached) {
+                camera.glInterface.removeFilter(historyFirstTeam)
+                camera.glInterface.removeFilter(historySecondTeam)
+                historyAttached = false
+            }
+            return
+        }
+        if (!historyAttached) {
+            camera.glInterface.addFilter(historyFirstTeam)
+            camera.glInterface.addFilter(historySecondTeam)
+            place(historyFirstTeam, HISTORY_X, ROW_TEAM1_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
+            place(historySecondTeam, HISTORY_X, ROW_TEAM2_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
+            historyAttached = true
+        }
+        // Никогда не пустая строка: в списке гарантированно есть хотя бы одна партия.
+        historyFirstTeam.setText(
+            scores.joinToString(" ") { it.team1.toString() },
+            HISTORY_TEXT_SIZE,
+            TEXT_COLOR
+        )
+        historySecondTeam.setText(
+            scores.joinToString(" ") { it.team2.toString() },
+            HISTORY_TEXT_SIZE,
+            TEXT_COLOR
+        )
     }
 
     /** Геометрия: порядок scale → position, поэтому повторные вызовы ничего не сдвигают. */
@@ -309,6 +362,11 @@ class ScoreOverlay(
         const val TITLE_TEXT_SIZE = 1500f
         const val SCORE_TEXT_SIZE = 2000f
         const val SET_TEXT_SIZE = 2000f
+
+        /** Строка со счётом партий: сдвиг по X, растяжение и размер шрифта. */
+        const val HISTORY_X = 27f
+        const val HISTORY_SCALE_X = 2f
+        const val HISTORY_TEXT_SIZE = 1200f
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
