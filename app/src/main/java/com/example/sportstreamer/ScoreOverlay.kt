@@ -141,7 +141,11 @@ class ScoreOverlay(
         // Спрайт сам по себе не растёт вместе с картинкой: ширину задаёт масштаб.
         // Считаем его пропорционально ширине картинки, чтобы добавочная плитка удлиняла
         // плашку, а не сжималась внутри прежнего размера. Левый край оставляем на месте.
-        val scaleX = LOGO_SCALE_X * bitmap.width / BASE_PLAQUE_WIDTH_PX
+        // decodeResource увеличивает картинку под плотность экрана, поэтому ширину
+        // сравниваем с базовой, приведённой к тем же пикселям.
+        val density = resources.displayMetrics.density
+        val baseWidth = BASE_PLAQUE_WIDTH_PX * density
+        val scaleX = LOGO_SCALE_X * bitmap.width / baseWidth
         logoFilter.setScale(scaleX, LOGO_SCALE_Y)
         logoFilter.setPosition(LOGO_X + (scaleX - LOGO_SCALE_X) / 2f, LOGO_Y)
 
