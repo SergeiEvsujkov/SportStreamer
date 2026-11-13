@@ -96,14 +96,14 @@
     <string name="main_live_label">● В эфире</string>
     <string name="main_recording_label">● Запись</string>
     <string name="main_match_over_toast">Игра закончена</string>
-    <string name="main_set_finished_title">Партия завершена</string>
-    <string name="main_set_finished_message">Счёт в партии: %1$d : %2$d.\nНачать новую партию?</string>
+    <string name="main_set_finished_title">Партия засчитана</string>
+    <string name="main_set_finished_message">Партия %1$d: %2$d:%3$d. Начинаем следующую?</string>
     <string name="main_set_finished_positive">Новая партия</string>
     <string name="main_set_finished_negative">Продолжить эту</string>
     <string name="main_match_finished_title">Матч завершён</string>
     <string name="main_match_finished_message">Победитель: %1$s\nСчёт по партиям: %2$d : %3$d</string>
     <string name="main_match_finished_positive">Новая игра</string>
-    <string name="main_match_finished_negative">Закрыть</string>
+    <string name="main_match_finished_negative">Отменить партию</string>
     <string name="main_bitrate_stats">Целевой: %1$.2f · факт: %2$.2f Mbps</string>
     <string name="main_recording_disabled">Сохранение в память выключено — включите его в настройках</string>
     <string name="main_bitrate_disabled">Трансляция выключена</string>
