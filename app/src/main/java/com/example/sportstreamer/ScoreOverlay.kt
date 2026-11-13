@@ -113,14 +113,31 @@ class ScoreOverlay(
      */
     private var appliedState: State? = null
 
-    /** Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает. */
-    private fun applyLogoImage() {
-        val bitmap = BitmapFactory.decodeResource(resources, R.drawable.score_title)
+    /** Сколько партий было при последней установке картинки плашки. */
+    private var plaqueSets = -1
+
+    /** Картинка плашки под число сыгранных партий. */
+    private fun plaqueDrawable(sets: Int): Int = when (sets) {
+        0, 1 -> R.drawable.score_title
+        2 -> R.drawable.score_title_2
+        3 -> R.drawable.score_title_3
+        4 -> R.drawable.score_title_4
+        else -> R.drawable.score_title_5
+    }
+
+    /**
+     * Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает.
+     * [sets] выбирает картинку: у каждой сыгранной партии своя плитка.
+     */
+    private fun applyLogoImage(sets: Int) {
+        val resId = plaqueDrawable(sets)
+        val bitmap = BitmapFactory.decodeResource(resources, resId)
         if (bitmap == null) {
-            Log.w(TAG, "Логотип score_title недоступен — оверлей без логотипа")
+            Log.w(TAG, "Плашка $resId недоступна — оверлей без плашки")
             return
         }
         logoFilter.setImage(bitmap)
+        Log.i(TAG, "плашка: sets=$sets, res=$resId, bmp=${bitmap.width}x${bitmap.height}")
     }
 
     /**
@@ -144,6 +161,7 @@ class ScoreOverlay(
         team1ColorApplied = null
         team2ColorApplied = null
         logoApplied = false
+        plaqueSets = -1
         historyShown = 0
     }
 
@@ -173,9 +191,11 @@ class ScoreOverlay(
             applyStripImage(stripTeam2Filter, R.drawable.color_team2, team2Color)
             team2ColorApplied = team2Color
         }
-        if (reattached || !logoApplied) {
-            applyLogoImage()
+        val setsNow = state.team1Sets + state.team2Sets
+        if (reattached || !logoApplied || setsNow != plaqueSets) {
+            applyLogoImage(setsNow)
             logoApplied = true
+            plaqueSets = setsNow
         }
 
         applyGeometry()
@@ -220,6 +240,12 @@ class ScoreOverlay(
 
         // Колонка текущей партии показывает живой счёт, поэтому обновляем на каждое изменение.
         updateSetColumns(state)
+
+        val setsTotal = state.team1Sets + state.team2Sets
+        if (logoApplied && setsTotal != plaqueSets) {
+            applyLogoImage(setsTotal)
+            plaqueSets = setsTotal
+        }
 
         appliedState = state
     }
