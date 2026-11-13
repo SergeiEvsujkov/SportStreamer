@@ -49,7 +49,9 @@ class ScoreOverlay(
         /** Счёт завершённых партий по порядку: 25:23, 22:25 … */
         val setScores: List<ScoreEngine.SetScore> = emptyList(),
         /** Партия засчитана и ждёт «Новой партии»: очки ещё не обнулены. */
-        val awaitingNextSet: Boolean = false
+        val awaitingNextSet: Boolean = false,
+        /** Матч завершён: новой партии не будет, лишняя колонка не нужна. */
+        val matchOver: Boolean = false
     )
 
     // --- Фильтры создаются один раз, при создании объекта (то есть при открытии активити). ---
@@ -268,7 +270,7 @@ class ScoreOverlay(
         }
 
         for (i in 0 until target) {
-            val firstIsLive = i == finished.size
+            val firstIsLive = !state.matchOver && i == finished.size
             // Пока оператор не нажал «Новая партия», очки на табло принадлежат только что
             // закрытой партии: новая колонка должна быть 00:00, а не повторять её счёт.
             val liveStarted = !state.awaitingNextSet

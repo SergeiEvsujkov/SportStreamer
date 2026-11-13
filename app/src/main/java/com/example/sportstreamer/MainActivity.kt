@@ -1115,7 +1115,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         team1Sets = engine.team1Sets,
         team2Sets = engine.team2Sets,
         setScores = engine.setHistory,
-        awaitingNextSet = engine.isAwaitingNextSet
+        awaitingNextSet = engine.isAwaitingNextSet,
+        matchOver = engine.isMatchOver
     )
 
     private fun updateUi() {
