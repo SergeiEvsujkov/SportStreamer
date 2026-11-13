@@ -9,34 +9,31 @@ import kotlin.math.abs
  * в обоих случаях нужен перевес минимум в 2 очка.
  * Матч идёт до [setsToWin] выигранных партий: «3 партии» — это 2 победы, «5 партий» — 3 победы.
  *
- * Партия засчитывается СРАЗУ в момент победного очка: счёт по партиям и [setHistory] меняются
- * синхронно с табло. Очки при этом остаются на экране (25:23), чтобы зритель успел прочитать
- * итог партии — обнуляются они только по команде [startNextSet].
+ * Когда партия закрыта, движок возвращает [PointResult.SetFinished] или [PointResult.MatchFinished]
+ * и запоминает победителя в [pendingWinner] — до решения пользователя партия ещё не засчитана
+ * в [team1Sets]/[team2Sets], но уже учитывается в [isMatchOver]. Подтверждение — [startNewSet],
+ * отказ («продолжить эту партию») — [declineSetCompletion].
  *
- * Пока оператор не начал следующую партию ([isAwaitingNextSet]) или пока матч не завершён
- * ([isMatchOver]), очки не растут. Ошибку можно исправить одним шагом: [rollbackLastSet]
- * снимает последнюю партию со счёта и возвращает очки к состоянию до победного очка.
+ * Незавершённое подтверждение не попадает в [Snapshot]: после пересоздания активити диалог
+ * исчезает, и вопрос будет задан снова при следующем очке.
  *
- * Класс не зависит от Android.
+ * Класс не зависит от Android, правила покрыты unit-тестами (ScoreEngineTest).
  */
 class ScoreEngine(val setsToWin: Int = SETS_TO_WIN_BEST_OF_THREE) {
 
     enum class Team { FIRST, SECOND }
 
-    /** Итоговый счёт одной завершённой партии. */
-    data class SetScore(val team1: Int, val team2: Int)
-
     /** Что произошло после изменения счёта: нужно ли спрашивать про новую партию или матч. */
     sealed interface PointResult {
-        /** Счёт не изменился (матч решён или ждём начала следующей партии). */
+        /** Счёт не изменился (матч решён или ждём ответа по закрытой партии). */
         data object Ignored : PointResult
 
         data object ScoreChanged : PointResult
 
-        /** Партия засчитана, матч продолжается — нужно начать следующую партию. */
+        /** Партия выиграна, матч продолжается — нужно подтверждение новой партии. */
         data class SetFinished(val team: Team) : PointResult
 
-        /** Партия засчитана и матч завершён. */
+        /** Партия выиграна и матч завершён. */
         data class MatchFinished(val team: Team) : PointResult
     }
 
@@ -45,16 +42,7 @@ class ScoreEngine(val setsToWin: Int = SETS_TO_WIN_BEST_OF_THREE) {
         val team2Score: Int,
         val team1Sets: Int,
         val team2Sets: Int,
-        val history: List<SetScore>,
-        val awaitingNextSet: Boolean
-    )
-
-    /** Состояние перед победным очком: по нему откатывается случайно засчитанная партия. */
-    private data class RollbackPoint(
-        val team1Score: Int,
-        val team2Score: Int,
-        val team1Sets: Int,
-        val team2Sets: Int
+        val setCompletionDeclined: Boolean
     )
 
     var team1Score: Int = 0
@@ -69,24 +57,18 @@ class ScoreEngine(val setsToWin: Int = SETS_TO_WIN_BEST_OF_THREE) {
     var team2Sets: Int = 0
         private set
 
-    /** Счёт всех завершённых партий по порядку: 25:23, 22:25, 15:10 … */
-    private val history = mutableListOf<SetScore>()
+    /** Пользователь отказался начинать новую партию: не переспрашиваем, пока условие не сброшено. */
+    private var setCompletionDeclined = false
 
-    val setHistory: List<SetScore>
-        get() = history.toList()
+    /** Победитель закрытой партии, ожидающий решения пользователя. */
+    private var pendingSetWinner: Team? = null
 
-    /** Победитель последней закрытой партии, пока оператор не начал следующую. */
-    var lastSetWinner: Team? = null
-        private set
-
-    /** Партия засчитана и ждёт команды «начать следующую»: очки заморожены. */
-    var isAwaitingNextSet: Boolean = false
-        private set
-
-    private var rollbackPoint: RollbackPoint? = null
+    /** Победитель закрытой партии или null, если решения не ждём. */
+    val pendingWinner: Team?
+        get() = pendingSetWinner
 
     val isMatchOver: Boolean
-        get() = team1Sets >= setsToWin || team2Sets >= setsToWin
+        get() = setsWithPending(Team.FIRST) >= setsToWin || setsWithPending(Team.SECOND) >= setsToWin
 
     val currentSetNumber: Int
         get() = team1Sets + team2Sets + 1
@@ -102,79 +84,58 @@ class ScoreEngine(val setsToWin: Int = SETS_TO_WIN_BEST_OF_THREE) {
     fun setsOf(team: Team): Int = if (team == Team.FIRST) team1Sets else team2Sets
 
     fun addPoint(team: Team): PointResult {
-        if (isMatchOver || isAwaitingNextSet) return PointResult.Ignored
-
-        // Запоминаем состояние ДО очка: из него откатывается засчитанная партия.
-        val before = RollbackPoint(team1Score, team2Score, team1Sets, team2Sets)
+        if (isMatchOver || pendingSetWinner != null) return PointResult.Ignored
 
         if (team == Team.FIRST) team1Score++ else team2Score++
 
+        if (!isAnySetFinished()) {
+            // Ни одна команда не «закрыла» партию (например, соперник отыграл разницу) —
+            // разрешаем спросить про новую партию заново.
+            setCompletionDeclined = false
+        }
         if (!isSetFinished(team)) return PointResult.ScoreChanged
+        if (setCompletionDeclined) return PointResult.ScoreChanged
 
-        // Партия выиграна: сразу в счёт партий и в историю — табло всегда согласовано.
-        rollbackPoint = before
-        if (team == Team.FIRST) team1Sets++ else team2Sets++
-        history.add(SetScore(team1Score, team2Score))
-        lastSetWinner = team
-
-        if (isMatchOver) {
-            // Очки остаются на экране: зритель видит итог последней партии.
+        // Победная партия засчитывается сразу: отменить её уже нечем — в диалоге только
+        // «Новая игра» или «Закрыть». Иначе и в диалоге, и на оверлее показывался бы счёт
+        // без победной партии: 2:2 вместо 3:2 или 2:3.
+        if (setsOf(team) + 1 >= setsToWin) {
+            if (team == Team.FIRST) team1Sets++ else team2Sets++
+            pendingSetWinner = null
+            setCompletionDeclined = false
             return PointResult.MatchFinished(team)
         }
-        isAwaitingNextSet = true
+
+        // Обычная партия пока «висит»: пользователь может выбрать «продолжить эту».
+        pendingSetWinner = team
         return PointResult.SetFinished(team)
     }
 
-    /**
-     * Снимает очко.
-     *
-     * Пока ждём начала следующей партии, снимать по одному очку нельзя — состояние
-     * разъедется. Вместо этого снятие очка отменяет партию целиком.
-     *
-     * @return true, если состояние изменилось.
-     */
-    fun removePoint(team: Team): Boolean {
-        if (isAwaitingNextSet) return rollbackLastSet()
-        if (isMatchOver) return false
+    fun removePoint(team: Team) {
+        // Пока висит вопрос о закрытой партии, счёт не правим — иначе состояние разъедется.
+        if (pendingSetWinner != null) return
+
         if (team == Team.FIRST) {
-            if (team1Score <= 0) return false
-            team1Score--
+            if (team1Score > 0) team1Score--
         } else {
-            if (team2Score <= 0) return false
-            team2Score--
+            if (team2Score > 0) team2Score--
         }
-        return true
+        if (!isAnySetFinished()) setCompletionDeclined = false
     }
 
-    /** Начинает следующую партию: очки обнуляются, засчитанная партия остаётся. */
-    fun startNextSet() {
-        if (!isAwaitingNextSet) return
+    /** Пользователь выбрал «продолжить эту партию»: партия не засчитывается. */
+    fun declineSetCompletion() {
+        setCompletionDeclined = true
+        pendingSetWinner = null
+    }
+
+    /** Новая партия: очки обнуляются, победителю засчитывается партия. */
+    fun startNewSet(winner: Team) {
         team1Score = 0
         team2Score = 0
-        isAwaitingNextSet = false
-        rollbackPoint = null
-        lastSetWinner = null
-    }
-
-    /**
-     * Отменяет последнюю засчитанную партию.
-     *
-     * Возвращает очки к состоянию до победного очка (24:23) и убирает партию из счёта
-     * и истории. Используется, когда очко начислили не той команде.
-     */
-    fun rollbackLastSet(): Boolean {
-        val point = rollbackPoint ?: return false
-        if (history.isEmpty()) return false
-
-        history.removeAt(history.lastIndex)
-        team1Sets = point.team1Sets
-        team2Sets = point.team2Sets
-        team1Score = point.team1Score
-        team2Score = point.team2Score
-        isAwaitingNextSet = false
-        rollbackPoint = null
-        lastSetWinner = null
-        return true
+        if (winner == Team.FIRST) team1Sets++ else team2Sets++
+        pendingSetWinner = null
+        setCompletionDeclined = false
     }
 
     fun resetMatch() {
@@ -182,26 +143,29 @@ class ScoreEngine(val setsToWin: Int = SETS_TO_WIN_BEST_OF_THREE) {
         team2Score = 0
         team1Sets = 0
         team2Sets = 0
-        history.clear()
-        isAwaitingNextSet = false
-        rollbackPoint = null
-        lastSetWinner = null
+        pendingSetWinner = null
+        setCompletionDeclined = false
     }
 
     fun snapshot(): Snapshot =
-        Snapshot(team1Score, team2Score, team1Sets, team2Sets, setHistory, isAwaitingNextSet)
+        Snapshot(team1Score, team2Score, team1Sets, team2Sets, setCompletionDeclined)
 
     fun restore(snapshot: Snapshot) {
         team1Score = snapshot.team1Score
         team2Score = snapshot.team2Score
         team1Sets = snapshot.team1Sets
         team2Sets = snapshot.team2Sets
-        history.clear()
-        history.addAll(snapshot.history)
-        isAwaitingNextSet = snapshot.awaitingNextSet
-        rollbackPoint = null
-        lastSetWinner = null
+        setCompletionDeclined = snapshot.setCompletionDeclined
+        pendingSetWinner = null
     }
+
+    /** Партии команды с учётом ещё не подтверждённой выигранной партии. */
+    private fun setsWithPending(team: Team): Int =
+        setsOf(team) + if (pendingSetWinner == team) 1 else 0
+
+    /** Закрыта ли партия хотя бы одной из команд (порог очков и перевес в 2 очка). */
+    private fun isAnySetFinished(): Boolean =
+        isSetFinished(Team.FIRST) || isSetFinished(Team.SECOND)
 
     private fun isSetFinished(team: Team): Boolean {
         val own = scoreOf(team)

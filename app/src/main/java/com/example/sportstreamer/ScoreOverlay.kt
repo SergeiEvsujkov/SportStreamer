@@ -45,9 +45,7 @@ class ScoreOverlay(
         val team1Score: Int,
         val team2Score: Int,
         val team1Sets: Int,
-        val team2Sets: Int,
-        /** Счёт завершённых партий по порядку: 25:23, 22:25 … */
-        val setScores: List<ScoreEngine.SetScore> = emptyList()
+        val team2Sets: Int
     )
 
     // --- Фильтры создаются один раз, при создании объекта (то есть при открытии активити). ---
@@ -57,10 +55,6 @@ class ScoreOverlay(
     private val scoreSecondTeam = TextObjectFilterRender()
     private val setFirstTeam = TextObjectFilterRender()
     private val setSecondTeam = TextObjectFilterRender()
-
-    /** Счёт сыгранных партий: отдельная строка на каждую команду. */
-    private val historyFirstTeam = TextObjectFilterRender()
-    private val historySecondTeam = TextObjectFilterRender()
 
     private val logoFilter = ImageObjectFilterRender()
     private val stripTeam1Filter = ImageObjectFilterRender()
@@ -72,9 +66,7 @@ class ScoreOverlay(
         scoreFirstTeam,
         scoreSecondTeam,
         setFirstTeam,
-        setSecondTeam,
-        historyFirstTeam,
-        historySecondTeam
+        setSecondTeam
     )
 
     private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter)
@@ -221,19 +213,6 @@ class ScoreOverlay(
             setSecondTeam.setText(state.team2Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
         }
 
-        if (previous?.setScores != state.setScores) {
-            historyFirstTeam.setText(
-                state.setScores.joinToString(" ") { it.team1.toString() },
-                HISTORY_TEXT_SIZE,
-                TEXT_COLOR
-            )
-            historySecondTeam.setText(
-                state.setScores.joinToString(" ") { it.team2.toString() },
-                HISTORY_TEXT_SIZE,
-                TEXT_COLOR
-            )
-        }
-
         appliedState = state
     }
 
@@ -265,8 +244,6 @@ class ScoreOverlay(
         place(scoreSecondTeam, SCORE_X, ROW_TEAM2_Y, SCORE_SCALE_X, ROW_SCALE_Y)
         place(setFirstTeam, SET_X, ROW_TEAM1_Y, SET_SCALE_X, ROW_SCALE_Y)
         place(setSecondTeam, SET_X, ROW_TEAM2_Y, SET_SCALE_X, ROW_SCALE_Y)
-        place(historyFirstTeam, HISTORY_X, ROW_TEAM1_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
-        place(historySecondTeam, HISTORY_X, ROW_TEAM2_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
     }
 
     private fun place(
@@ -332,11 +309,6 @@ class ScoreOverlay(
         const val TITLE_TEXT_SIZE = 1500f
         const val SCORE_TEXT_SIZE = 2000f
         const val SET_TEXT_SIZE = 2000f
-
-        /** Позиция и размер строки со счётом партий (подбирается под плашку). */
-        const val HISTORY_X = 25f
-        const val HISTORY_SCALE_X = 2f
-        const val HISTORY_TEXT_SIZE = 1200f
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
