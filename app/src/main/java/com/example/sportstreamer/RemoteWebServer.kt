@@ -24,7 +24,7 @@ class RemoteWebServer(
     private val stateProvider: () -> String,
     private val pointHandler: (team: Int, add: Boolean) -> Unit,
     private val setDecisionHandler: (newSet: Boolean) -> Unit,
-    private val matchDecisionHandler: (again: Boolean) -> Unit,
+    private val matchDecisionHandler: (action: String) -> Unit,
     private val sessionStartHandler: () -> Unit,
     private val sessionStopHandler: () -> Unit
 ) {
@@ -123,7 +123,8 @@ class RemoteWebServer(
                 }
 
                 method == "POST" && path == "/match-decision" -> {
-                    matchDecisionHandler(query["again"] == "1" || query["again"] == "true")
+                    // new — новая игра, rollback — отменить последнюю партию, close — просто закрыть.
+                    matchDecisionHandler(query["action"] ?: "close")
                     respond(client, 200, "application/json; charset=utf-8", "{\"ok\":true}")
                 }
 
@@ -295,11 +296,11 @@ async function tick() {
     if (s.setPending) {
       d.innerHTML = decisionButton('Новая партия', '/set-decision?newSet=1') +
                     decisionButton('Продолжить', '/set-decision?newSet=0');
-      el('status').textContent = 'партия завершена — решите здесь или на телефоне';
+      el('status').textContent = 'партия засчитана — начните следующую или отмените завершение';
     } else if (s.matchPending) {
       d.innerHTML = decisionButton('Новая игра', '/match-decision?again=1') +
                     decisionButton('Закрыть', '/match-decision?again=0');
-      el('status').textContent = 'матч завершён — решите здесь или на телефоне';
+      el('status').textContent = 'матч завершён — новая игра, отмена партии или закрыть';
     } else {
       d.innerHTML = '';
         el('status').textContent = s.matchOver ? 'матч завершён' : 'связь есть';

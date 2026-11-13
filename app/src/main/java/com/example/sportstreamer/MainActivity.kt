@@ -707,7 +707,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                     }
                 },
                 setDecisionHandler = { newSet -> handler.post { applyRemoteSetDecision(newSet) } },
-                matchDecisionHandler = { again -> handler.post { applyRemoteMatchDecision(again) } },
+                matchDecisionHandler = { action -> handler.post { applyRemoteMatchDecision(action) } },
                 // Как и на источнике: одна кнопка — старт или стоп с подтверждением.
                 sessionStartHandler = {
                     handler.post { if (rtmpCamera2?.isStreaming != true && !isRecordingNow) toggleSession() }
@@ -1058,9 +1058,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     }
 
     /** Решение по завершённому матчу, пришедшее с пульта: новая игра или просто закрыть. */
-    private fun applyRemoteMatchDecision(again: Boolean) {
+    private fun applyRemoteMatchDecision(action: String) {
         if (matchFinishedDialog == null) return
-        if (again) engine.resetMatch()
+        when (action) {
+            "new" -> engine.resetMatch()
+            "rollback" -> engine.rollbackLastSet()
+            // "close" — просто закрыть: матч остаётся завершённым.
+        }
         matchFinishedDialog?.dismiss()
         matchFinishedDialog = null
         onMatchChanged()
