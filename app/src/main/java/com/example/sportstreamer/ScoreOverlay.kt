@@ -249,7 +249,9 @@ class ScoreOverlay(
      */
     private fun updateSetColumns(state: State) {
         val finished = state.setScores
-        val target = (finished.size + 1).coerceAtMost(MAX_SETS)
+        // После конца матча текущей партии нет: колонок ровно по числу сыгранных.
+        val extra = if (state.matchOver) 0 else 1
+        val target = (finished.size + extra).coerceAtMost(MAX_SETS)
 
         if (target == 0) {
             while (historyShown > 0) {
