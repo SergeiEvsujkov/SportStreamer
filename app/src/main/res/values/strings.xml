@@ -99,7 +99,7 @@
     <string name="main_set_finished_title">Партия засчитана</string>
     <string name="main_set_finished_message">Партия %1$d: %2$d:%3$d. Начинаем следующую?</string>
     <string name="main_set_finished_positive">Новая партия</string>
-    <string name="main_set_finished_negative">Продолжить эту</string>
+    <string name="main_set_finished_negative">Отменить завершение партии</string>
     <string name="main_match_finished_title">Матч завершён</string>
     <string name="main_match_finished_message">Победитель: %1$s\nСчёт по партиям: %2$d : %3$d</string>
     <string name="main_match_finished_positive">Новая игра</string>

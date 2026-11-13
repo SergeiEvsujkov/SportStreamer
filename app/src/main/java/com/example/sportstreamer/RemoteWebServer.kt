@@ -264,6 +264,19 @@ async function point(team, add) {
     await tick();
   } catch (e) { el('status').textContent = 'нет связи с источником'; }
 }
+// Колонки партий как на оверлее: завершённые + текущая (после конца матча её нет).
+function renderSets(s) {
+  const pad = n => String(n).padStart(2, '0');
+  const cols = (s.setHistory || '').trim().split(/\s+/).filter(Boolean);
+  if (!s.matchOver) {
+    const live = s.awaitingNextSet ? '00:00' : pad(s.t1) + ':' + pad(s.t2);
+    cols.push(live);
+  }
+  el('sets').innerHTML = cols
+    .map(c => '<span class="col">' + c.replace(':', '<br>') + '</span>')
+    .join('');
+}
+
 async function tick() {
   try {
     const r = await fetch('/state?t=' + encodeURIComponent(t), {cache:'no-store'});
