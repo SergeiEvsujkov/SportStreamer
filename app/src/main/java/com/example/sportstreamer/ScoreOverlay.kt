@@ -58,17 +58,17 @@ class ScoreOverlay(
     private val setFirstTeam = TextObjectFilterRender()
     private val setSecondTeam = TextObjectFilterRender()
 
-    /** Счёт сыгранных партий: отдельная строка на каждую команду. */
-    private val historyFirstTeam = TextObjectFilterRender()
-    private val historySecondTeam = TextObjectFilterRender()
-
     /**
-     * Добавлены ли строки со счётом партий в GL.
+     * Счёт партий: на каждую партию своя пара надписей с фиксированной позицией.
      *
-     * Пустую строку нельзя отдать в `setText`: библиотека создаёт битмап нулевой ширины
-     * и падает. Пока партий нет, этих надписей в GL нет вообще.
+     * Одна растущая строка не годится: позиция спрайта задаёт его центр, поэтому при
+     * добавлении второй партии первая съезжала влево. Здесь у каждой партии своё место.
      */
-    private var historyAttached = false
+    private val historyFirstTeam = List(MAX_SETS) { TextObjectFilterRender() }
+    private val historySecondTeam = List(MAX_SETS) { TextObjectFilterRender() }
+
+    /** Сколько партий сейчас показано в GL. */
+    private var historyShown = 0
 
     private val logoFilter = ImageObjectFilterRender()
     private val stripTeam1Filter = ImageObjectFilterRender()
@@ -140,7 +140,7 @@ class ScoreOverlay(
         team1ColorApplied = null
         team2ColorApplied = null
         logoApplied = false
-        historyAttached = false
+        historyShown = 0
     }
 
     /**
@@ -245,7 +245,7 @@ class ScoreOverlay(
     fun detach() {
         attached = false
         appliedState = null
-        historyAttached = false
+        historyShown = 0
     }
 
     /**
@@ -253,32 +253,53 @@ class ScoreOverlay(
      * `TextObjectFilterRender.setText` (битмап нулевой ширины).
      */
     private fun updateHistoryTexts(scores: List<ScoreEngine.SetScore>) {
-        if (scores.isEmpty()) {
-            if (historyAttached) {
-                camera.glInterface.removeFilter(historyFirstTeam)
-                camera.glInterface.removeFilter(historySecondTeam)
-                historyAttached = false
+        val target = scores.size.coerceAtMost(MAX_SETS)
+
+        if (target == 0) {
+            // Партий нет — надписей в GL нет: пустая строка ломает setText.
+            while (historyShown > 0) {
+                historyShown--
+                removeHistoryAt(historyShown)
             }
             return
         }
-        if (!historyAttached) {
-            camera.glInterface.addFilter(historyFirstTeam)
-            camera.glInterface.addFilter(historySecondTeam)
-            place(historyFirstTeam, HISTORY_X, ROW_TEAM1_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
-            place(historySecondTeam, HISTORY_X, ROW_TEAM2_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
-            historyAttached = true
+
+        // Партий стало меньше (откат) — убираем лишние.
+        while (historyShown > target) {
+            historyShown--
+            removeHistoryAt(historyShown)
         }
-        // Никогда не пустая строка: в списке гарантированно есть хотя бы одна партия.
-        historyFirstTeam.setText(
-            scores.asReversed().joinToString(" ") { "%02d".format(it.team1) },
-            HISTORY_TEXT_SIZE,
-            TEXT_COLOR
-        )
-        historySecondTeam.setText(
-            scores.asReversed().joinToString(" ") { "%02d".format(it.team2) },
-            HISTORY_TEXT_SIZE,
-            TEXT_COLOR
-        )
+        // Партий больше — добавляем новые на их постоянные места.
+        while (historyShown < target) {
+            val index = historyShown
+            camera.glInterface.addFilter(historyFirstTeam[index])
+            camera.glInterface.addFilter(historySecondTeam[index])
+            place(
+                historyFirstTeam[index],
+                HISTORY_FIRST_X + index * HISTORY_STEP_X,
+                ROW_TEAM1_Y,
+                HISTORY_SCALE_X,
+                ROW_SCALE_Y
+            )
+            place(
+                historySecondTeam[index],
+                HISTORY_FIRST_X + index * HISTORY_STEP_X,
+                ROW_TEAM2_Y,
+                HISTORY_SCALE_X,
+                ROW_SCALE_Y
+            )
+            historyShown++
+        }
+
+        for (i in 0 until target) {
+            historyFirstTeam[i].setText("%02d".format(scores[i].team1), HISTORY_TEXT_SIZE, TEXT_COLOR)
+            historySecondTeam[i].setText("%02d".format(scores[i].team2), HISTORY_TEXT_SIZE, TEXT_COLOR)
+        }
+    }
+
+    private fun removeHistoryAt(index: Int) {
+        camera.glInterface.removeFilter(historyFirstTeam[index])
+        camera.glInterface.removeFilter(historySecondTeam[index])
     }
 
     /** Геометрия: порядок scale → position, поэтому повторные вызовы ничего не сдвигают. */
@@ -364,9 +385,14 @@ class ScoreOverlay(
         const val SET_TEXT_SIZE = 2000f
 
         /** Строка со счётом партий: сдвиг по X, растяжение и размер шрифта. */
-        const val HISTORY_X = 21f
-        const val HISTORY_SCALE_X = 2f
-        const val HISTORY_TEXT_SIZE = 800f
+        /** Максимум партий в матче: столько пар надписей создаётся. */
+        const val MAX_SETS = 5
+
+        /** Первая партия стоит здесь и не двигается; следующие идут правее с этим шагом. */
+        const val HISTORY_FIRST_X = 25.5f
+        const val HISTORY_STEP_X = 2.7f
+        const val HISTORY_SCALE_X = 1f
+        const val HISTORY_TEXT_SIZE = 1200f
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
