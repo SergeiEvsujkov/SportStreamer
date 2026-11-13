@@ -137,7 +137,15 @@ class ScoreOverlay(
             return
         }
         logoFilter.setImage(bitmap)
-        Log.i(TAG, "плашка: sets=$sets, res=$resId, bmp=${bitmap.width}x${bitmap.height}")
+
+        // Спрайт сам по себе не растёт вместе с картинкой: ширину задаёт масштаб.
+        // Считаем его пропорционально ширине картинки, чтобы добавочная плитка удлиняла
+        // плашку, а не сжималась внутри прежнего размера. Левый край оставляем на месте.
+        val scaleX = LOGO_SCALE_X * bitmap.width / BASE_PLAQUE_WIDTH_PX
+        logoFilter.setScale(scaleX, LOGO_SCALE_Y)
+        logoFilter.setPosition(LOGO_X + (scaleX - LOGO_SCALE_X) / 2f, LOGO_Y)
+
+        Log.i(TAG, "плашка: sets=$sets, res=$resId, bmp=${bitmap.width}x${bitmap.height}, scaleX=$scaleX")
     }
 
     /**
@@ -419,6 +427,9 @@ class ScoreOverlay(
         const val HISTORY_STEP_X = 2.7f
         const val HISTORY_SCALE_X = 2f
         const val HISTORY_TEXT_SIZE = 2000f
+
+        /** Ширина базовой плашки score_title.png в пикселях исходника (558). */
+        const val BASE_PLAQUE_WIDTH_PX = 558f
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
