@@ -56,7 +56,16 @@ class ScoreOverlay(
     private val setFirstTeam = TextObjectFilterRender()
     private val setSecondTeam = TextObjectFilterRender()
 
-    private val logoFilter = ImageObjectFilterRender()
+    /**
+     * Плашки под каждое число партий: 0-1, 2, 3, 4, 5.
+     *
+     * Держим отдельные фильтры, а не подменяем картинку у одного: библиотека не всегда
+     * подхватывает `setImage` у уже добавленного фильтра. В GL показываем ровно один.
+     */
+    private val plaqueFilters = List(PLAQUE_VARIANTS) { ImageObjectFilterRender() }
+
+    /** Какой из фильтров сейчас добавлен в GL. */
+    private var plaqueActive: Int = -1
     private val stripTeam1Filter = ImageObjectFilterRender()
     private val stripTeam2Filter = ImageObjectFilterRender()
 
@@ -69,7 +78,7 @@ class ScoreOverlay(
         setSecondTeam
     )
 
-    private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter)
+    private val imageFilters = listOf(stripTeam1Filter, stripTeam2Filter)
 
     /** Добавлены ли фильтры в GL-интерфейс: это делается один раз за активити. */
     private var attached = false
@@ -82,10 +91,10 @@ class ScoreOverlay(
      * наложению уже переработан и даёт чёрный фон. Декодируем его заново — так же, как полосы
      * создаются заново в `applyStripImage(...)`.
      */
-    private var logoApplied = false
+
 
     /** Сколько партий было при последней отрисовке плашки: при смене меняем картинку. */
-    private var plaqueSets: Int = -1
+
 
     /** Какие цвета уже наложены на полосы, чтобы не перекрашивать их на каждый attach. */
     private var team1ColorApplied: Int? = null
@@ -98,23 +107,45 @@ class ScoreOverlay(
      */
     private var appliedState: State? = null
 
-    /** Картинка плашки под число сыгранных партий: у каждой партии своя плитка. */
-    private fun plaqueDrawable(sets: Int): Int = when (sets) {
-        0, 1 -> R.drawable.score_title
-        2 -> R.drawable.score_title_2
-        3 -> R.drawable.score_title_3
-        4 -> R.drawable.score_title_4
-        else -> R.drawable.score_title_5
+    /** Картинки плашки по числу сыгранных партий: у каждой партии своя плитка. */
+    private val plaqueDrawables = intArrayOf(
+        R.drawable.score_title,
+        R.drawable.score_title,
+        R.drawable.score_title_2,
+        R.drawable.score_title_3,
+        R.drawable.score_title_4,
+        R.drawable.score_title_5
+    )
+
+    /** Индекс картинки под число партий: 0 и 1 — базовая, дальше варианты. */
+    private fun plaqueIndex(sets: Int): Int = sets.coerceIn(0, PLAQUE_VARIANTS - 1)
+
+    /**
+     * Готовит все картинки плашек заранее.
+     *
+     * Битмап после загрузки в текстуру библиотека перерабатывает, поэтому декодируем заново
+     * при каждом подключении — как это было с одной плашкой.
+     */
+    private fun applyLogoImage() {
+        plaqueFilters.forEachIndexed { index, filter ->
+            val bitmap = BitmapFactory.decodeResource(resources, plaqueDrawables[index])
+            if (bitmap == null) {
+                Log.w(TAG, "Плашка ${plaqueDrawables[index]} недоступна")
+                return@forEachIndexed
+            }
+            filter.setImage(bitmap)
+        }
     }
 
-    /** Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает. */
-    private fun applyLogoImage(sets: Int = 0) {
-        val bitmap = BitmapFactory.decodeResource(resources, plaqueDrawable(sets))
-        if (bitmap == null) {
-            Log.w(TAG, "Логотип score_title недоступен — оверлей без логотипа")
-            return
+    /** Показывает плашку под текущее число партий, убирая предыдущую из GL. */
+    private fun showPlaque(sets: Int) {
+        val target = plaqueIndex(sets)
+        if (target == plaqueActive) return
+        if (plaqueActive >= 0) {
+            camera.glInterface.removeFilter(plaqueFilters[plaqueActive])
         }
-        logoFilter.setImage(bitmap)
+        camera.glInterface.addFilter(plaqueFilters[target])
+        plaqueActive = target
     }
 
     /**
@@ -137,7 +168,7 @@ class ScoreOverlay(
         appliedState = null
         team1ColorApplied = null
         team2ColorApplied = null
-        logoApplied = false
+        plaqueActive = -1
     }
 
     /**
@@ -150,10 +181,12 @@ class ScoreOverlay(
     fun attach(state: State, team1Color: Int, team2Color: Int) {
         val reattached = !attached
         if (reattached) {
-            // Порядок как в макете: логотип, полосы, затем надписи поверх них.
-            imageFilters.forEach { camera.glInterface.addFilter(it) }
+            // Порядок как в макете: плашка, полосы, затем надписи поверх них.
+            stripTeam1Filter.let { camera.glInterface.addFilter(it) }
+            stripTeam2Filter.let { camera.glInterface.addFilter(it) }
             textFilters.forEach { camera.glInterface.addFilter(it) }
             attached = true
+            plaqueActive = -1
         }
 
         // Так же, как текст: при повторном подключении отдаём картинки заново, а цвета полос
@@ -167,11 +200,8 @@ class ScoreOverlay(
             team2ColorApplied = team2Color
         }
         val sets = state.team1Sets + state.team2Sets
-        if (reattached || !logoApplied || sets != plaqueSets) {
-            applyLogoImage(sets)
-            logoApplied = true
-            plaqueSets = sets
-        }
+        if (reattached) applyLogoImage()
+        showPlaque(sets)
 
         applyGeometry()
         // В новом GL-контексте текстуры надписей тоже пустые: сбрасываем кэш и отдаём все
@@ -227,12 +257,7 @@ class ScoreOverlay(
             setSecondTeam.setText(state.team2Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
         }
 
-        val sets = state.team1Sets + state.team2Sets
-        if (logoApplied && sets != plaqueSets) {
-            applyLogoImage(sets)
-            plaqueSets = sets
-        }
-
+        showPlaque(state.team1Sets + state.team2Sets)
         appliedState = state
     }
 
@@ -250,8 +275,10 @@ class ScoreOverlay(
 
     /** Геометрия: порядок scale → position, поэтому повторные вызовы ничего не сдвигают. */
     private fun applyGeometry() {
-        logoFilter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
-        logoFilter.setPosition(LOGO_X, LOGO_Y)
+        plaqueFilters.forEach { filter ->
+            filter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
+            filter.setPosition(LOGO_X, LOGO_Y)
+        }
 
         stripTeam1Filter.setScale(STRIP_SCALE_X, STRIP_SCALE_Y)
         stripTeam1Filter.setPosition(STRIP_X, STRIP_TEAM1_Y)
@@ -296,6 +323,9 @@ class ScoreOverlay(
         const val TEXT_COLOR = -0x1
 
         // --- Логотип и полосы: координаты используются напрямую (порядок scale → position) ---
+        /** Сколько картинок плашки: 0-1 партия, затем 2, 3, 4, 5. */
+        const val PLAQUE_VARIANTS = 6
+
         const val LOGO_X = 1f
         const val LOGO_Y = 86f
         const val LOGO_SCALE_X = 27f
