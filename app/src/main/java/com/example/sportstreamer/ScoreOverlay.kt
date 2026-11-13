@@ -74,11 +74,11 @@ class ScoreOverlay(
     private val stripTeam1Filter = ImageObjectFilterRender()
     private val stripTeam2Filter = ImageObjectFilterRender()
 
+    // scoreFirstTeam/scoreSecondTeam больше не выводятся: счёт показывают колонки партий,
+    // иначе на плашке было бы два одинаковых счётчика.
     private val textFilters = listOf(
         titleFirstTeam,
         titleSecondTeam,
-        scoreFirstTeam,
-        scoreSecondTeam,
         setFirstTeam,
         setSecondTeam
     )
@@ -204,20 +204,6 @@ class ScoreOverlay(
             titleSecondTeam.setText(
                 state.team2Name.uppercase(locale).padStart(TITLE_CHARS, ' '),
                 TITLE_TEXT_SIZE,
-                TEXT_COLOR
-            )
-        }
-        if (previous?.team1Score != state.team1Score) {
-            scoreFirstTeam.setText(
-                state.team1Score.toString().padStart(SCORE_CHARS, '0'),
-                SCORE_TEXT_SIZE,
-                TEXT_COLOR
-            )
-        }
-        if (previous?.team2Score != state.team2Score) {
-            scoreSecondTeam.setText(
-                state.team2Score.toString().padStart(SCORE_CHARS, '0'),
-                SCORE_TEXT_SIZE,
                 TEXT_COLOR
             )
         }
