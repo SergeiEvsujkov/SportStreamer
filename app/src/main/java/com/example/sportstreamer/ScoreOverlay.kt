@@ -61,14 +61,7 @@ class ScoreOverlay(
     private val setFirstTeam = TextObjectFilterRender()
     private val setSecondTeam = TextObjectFilterRender()
 
-    /** Тёмная часть плашки с именами и счётом: фиксированная. */
-    private val plaqueLeftFilter = ImageObjectFilterRender()
-
-    /** Бирюзовая часть плашки: фиксированная. */
-    private val plaqueTealFilter = ImageObjectFilterRender()
-
-    /** Розовая часть: растягивается на столбец за каждую сыгранную партию. */
-    private val plaquePinkFilter = ImageObjectFilterRender()
+    private val logoFilter = ImageObjectFilterRender()
 
     /** Таблица счёта по партиям: одна картинка, нарисованная через Canvas. */
     private val historyFilter = ImageObjectFilterRender()
@@ -84,14 +77,7 @@ class ScoreOverlay(
         setSecondTeam
     )
 
-    private val imageFilters = listOf(
-        plaqueLeftFilter,
-        plaqueTealFilter,
-        plaquePinkFilter,
-        stripTeam1Filter,
-        stripTeam2Filter,
-        historyFilter
-    )
+    private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter, historyFilter)
 
     /** Добавлены ли фильтры в GL-интерфейс: это делается один раз за активити. */
     private var attached = false
@@ -119,20 +105,12 @@ class ScoreOverlay(
 
     /** Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает. */
     private fun applyLogoImage() {
-        val source = BitmapFactory.decodeResource(resources, R.drawable.score_title)
-        if (source == null) {
+        val bitmap = BitmapFactory.decodeResource(resources, R.drawable.score_title)
+        if (bitmap == null) {
             Log.w(TAG, "Логотип score_title недоступен — оверлей без логотипа")
             return
         }
-        // Плашка состоит из трёх зон: тёмной, бирюзовой и розовой. Режем по ширине,
-        // чтобы растягивать только розовую — именно она показывает счёт по партиям.
-        val width = source.width
-        val xTeal = (width * PLAQUE_TEAL_FROM).toInt()
-        val xPink = (width * PLAQUE_TEAL_TO).toInt()
-        val xEnd = (width * PLAQUE_PINK_TO).toInt()
-        plaqueLeftFilter.setImage(Bitmap.createBitmap(source, 0, 0, xTeal, source.height))
-        plaqueTealFilter.setImage(Bitmap.createBitmap(source, xTeal, 0, xPink - xTeal, source.height))
-        plaquePinkFilter.setImage(Bitmap.createBitmap(source, xPink, 0, xEnd - xPink, source.height))
+        logoFilter.setImage(bitmap)
     }
 
     /**
@@ -261,35 +239,11 @@ class ScoreOverlay(
         appliedState = null
     }
 
-    /** Левый край плашки: позиция спрайта задаёт центр, поэтому вычитаем половину ширины. */
-    private fun plaqueLeftEdge(): Float = LOGO_X - LOGO_SCALE_X / 2f
-
-    private fun plaqueLeftWidth(): Float = LOGO_SCALE_X * PLAQUE_TEAL_FROM
-
-    private fun plaqueTealWidth(): Float = LOGO_SCALE_X * (PLAQUE_TEAL_TO - PLAQUE_TEAL_FROM)
-
-    /** Базовая ширина розовой части: столько занимает один столбец партии. */
-    private fun plaquePinkBaseWidth(): Float = LOGO_SCALE_X * (PLAQUE_PINK_TO - PLAQUE_TEAL_TO)
-
-    /** Раскладывает три части плашки подряд: тёмная, бирюзовая, розовая нужной ширины. */
-    private fun placePlaque(pinkScale: Float) {
-        val left = plaqueLeftEdge()
-        val leftWidth = plaqueLeftWidth()
-        val tealWidth = plaqueTealWidth()
-
-        plaqueLeftFilter.setScale(leftWidth, LOGO_SCALE_Y)
-        plaqueLeftFilter.setPosition(left + leftWidth / 2f, LOGO_Y)
-
-        plaqueTealFilter.setScale(tealWidth, LOGO_SCALE_Y)
-        plaqueTealFilter.setPosition(left + leftWidth + tealWidth / 2f, LOGO_Y)
-
-        plaquePinkFilter.setScale(pinkScale, LOGO_SCALE_Y)
-        plaquePinkFilter.setPosition(left + leftWidth + tealWidth + pinkScale / 2f, LOGO_Y)
-    }
-
     /** Геометрия: порядок scale → position, поэтому повторные вызовы ничего не сдвигают. */
     private fun applyGeometry() {
-        placePlaque(pinkScale = plaquePinkBaseWidth())
+        logoFilter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
+        logoFilter.setPosition(LOGO_X, LOGO_Y)
+        placeHistory(emptyList())
 
         stripTeam1Filter.setScale(STRIP_SCALE_X, STRIP_SCALE_Y)
         stripTeam1Filter.setPosition(STRIP_X, STRIP_TEAM1_Y)
@@ -323,19 +277,26 @@ class ScoreOverlay(
      * на половину прироста (позиция спрайта задаёт его центр).
      */
     private fun applyHistory(scores: List<ScoreEngine.SetScore>) {
-        val columns = scores.size
-        val pinkWidth = if (columns == 0) plaquePinkBaseWidth() else columns * plaquePinkBaseWidth()
-        placePlaque(pinkScale = pinkWidth)
+        placeHistory(scores)
+    }
 
+    /**
+     * Ставит розовый блок счёта партий справа от плашки.
+     *
+     * Блок рисуется собственной картинкой: фон — тот же розовый, что в плашке, сверху два
+     * ряда цифр. Ширина растёт на один столбец за каждую сыгранную партию, будущие партии
+     * не резервируются.
+     */
+    private fun placeHistory(scores: List<ScoreEngine.SetScore>) {
+        val columns = scores.size
         if (columns == 0) {
             historyFilter.setImage(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
             return
         }
         historyFilter.setImage(drawHistoryBitmap(scores))
-        val left = plaqueLeftEdge()
-        val pinkCenter = left + plaqueLeftWidth() + plaqueTealWidth() + pinkWidth / 2f
-        historyFilter.setScale(pinkWidth, LOGO_SCALE_Y)
-        historyFilter.setPosition(pinkCenter, LOGO_Y)
+        val width = columns * HISTORY_CELL_SCALE_X
+        historyFilter.setScale(width, HISTORY_CELL_SCALE_Y)
+        historyFilter.setPosition(HISTORY_X + width / 2f, HISTORY_Y)
     }
 
     /** Таблица в две строки: верхняя — первая команда, нижняя — вторая. */
@@ -344,6 +305,8 @@ class ScoreOverlay(
         val height = HISTORY_CELL_PX * 2
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
+        // Фон — розовый, как правая зона плашки: блок продолжает её визуально.
+        canvas.drawColor(HISTORY_BACKGROUND)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = TEXT_COLOR
             textAlign = Paint.Align.CENTER
@@ -424,12 +387,14 @@ class ScoreOverlay(
         // Шаг столбца и его ширина совпадают: плашка растёт ровно на один столбец.
         const val HISTORY_STEP_X = 5f
         const val HISTORY_CELL_SCALE_X = 5f
+        /** Розовый фон блока — цвет правой зоны плашки (200, 100, 152). */
+        const val HISTORY_BACKGROUND = -0x3B639B68
         const val HISTORY_CELL_SCALE_Y = 6f
         /**
          * Левый край таблицы. Подобрано по скриншоту: счёт текущей партии заканчивается
          * примерно на 23 единицах, таблица начинается сразу за ним.
          */
-        const val HISTORY_X = 23f
+        const val HISTORY_X = 40f
         const val HISTORY_Y = 87f
         /** Размер клетки таблицы в пикселях текстуры. */
         const val HISTORY_CELL_PX = 120
