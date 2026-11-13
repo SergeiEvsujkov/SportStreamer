@@ -47,7 +47,9 @@ class ScoreOverlay(
         val team1Sets: Int,
         val team2Sets: Int,
         /** Счёт завершённых партий по порядку: 25:23, 22:25 … */
-        val setScores: List<ScoreEngine.SetScore> = emptyList()
+        val setScores: List<ScoreEngine.SetScore> = emptyList(),
+        /** Партия засчитана и ждёт «Новой партии»: очки ещё не обнулены. */
+        val awaitingNextSet: Boolean = false
     )
 
     // --- Фильтры создаются один раз, при создании объекта (то есть при открытии активити). ---
