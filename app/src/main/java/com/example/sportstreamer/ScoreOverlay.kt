@@ -264,36 +264,26 @@ class ScoreOverlay(
             return
         }
 
-        // Партий стало меньше (откат) — убираем лишние.
         while (historyShown > target) {
             historyShown--
             removeHistoryAt(historyShown)
         }
-        // Партий больше — добавляем новые на их постоянные места.
         while (historyShown < target) {
-            val index = historyShown
-            camera.glInterface.addFilter(historyFirstTeam[index])
-            camera.glInterface.addFilter(historySecondTeam[index])
-            place(
-                historyFirstTeam[index],
-                HISTORY_FIRST_X + index * HISTORY_STEP_X,
-                ROW_TEAM1_Y,
-                HISTORY_SCALE_X,
-                ROW_SCALE_Y
-            )
-            place(
-                historySecondTeam[index],
-                HISTORY_FIRST_X + index * HISTORY_STEP_X,
-                ROW_TEAM2_Y,
-                HISTORY_SCALE_X,
-                ROW_SCALE_Y
-            )
+            camera.glInterface.addFilter(historyFirstTeam[historyShown])
+            camera.glInterface.addFilter(historySecondTeam[historyShown])
             historyShown++
         }
 
+        // ВАЖНО: сначала setText, потом геометрия.
+        // setText() пересоздаёт текстуру под размер строки и сбрасывает масштаб с позицией,
+        // поэтому place() до него приводил к тому, что все партии рисовались в одном месте.
         for (i in 0 until target) {
             historyFirstTeam[i].setText("%02d".format(scores[i].team1), HISTORY_TEXT_SIZE, TEXT_COLOR)
             historySecondTeam[i].setText("%02d".format(scores[i].team2), HISTORY_TEXT_SIZE, TEXT_COLOR)
+
+            val x = HISTORY_FIRST_X + i * HISTORY_STEP_X
+            place(historyFirstTeam[i], x, ROW_TEAM1_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
+            place(historySecondTeam[i], x, ROW_TEAM2_Y, HISTORY_SCALE_X, ROW_SCALE_Y)
         }
     }
 
@@ -390,7 +380,7 @@ class ScoreOverlay(
 
         /** Первая партия стоит здесь и не двигается; следующие идут правее с этим шагом. */
         const val HISTORY_FIRST_X = 25.5f
-        const val HISTORY_STEP_X = 2.7f
+        const val HISTORY_STEP_X = 5f
         const val HISTORY_SCALE_X = 1f
         const val HISTORY_TEXT_SIZE = 1200f
 
