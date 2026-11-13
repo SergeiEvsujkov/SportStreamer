@@ -363,7 +363,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         outState.putInt(STATE_TEAM2_SCORE, snapshot.team2Score)
         outState.putInt(STATE_TEAM1_SETS, snapshot.team1Sets)
         outState.putInt(STATE_TEAM2_SETS, snapshot.team2Sets)
-        outState.putBoolean(STATE_DECLINED, snapshot.setCompletionDeclined)
+        outState.putIntArray(STATE_SET1, snapshot.history.map { it.team1 }.toIntArray())
+        outState.putIntArray(STATE_SET2, snapshot.history.map { it.team2 }.toIntArray())
+        outState.putBoolean(STATE_AWAITING_NEXT, snapshot.awaitingNextSet)
         outState.putBoolean(STATE_AWAITING_SETTINGS, awaitingSettings)
     }
 
@@ -694,7 +696,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                         team2Name = settings.team2Name,
                         sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
                         recording = isRecordingNow,
-                        bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0
+                        bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0,
+                        setHistory = engine.setHistory.joinToString(" ") { "${it.team1}:${it.team2}" }
                     )
                 },
                 pointHandler = { team, add ->
@@ -974,7 +977,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
 
         when (result) {
-            is ScoreEngine.PointResult.SetFinished -> showSetFinishedDialog(result.team)
+            is ScoreEngine.PointResult.SetFinished -> showSetFinishedDialog()
             is ScoreEngine.PointResult.MatchFinished -> showMatchFinishedDialog(result.team)
             ScoreEngine.PointResult.Ignored, ScoreEngine.PointResult.ScoreChanged -> Unit
         }
@@ -982,29 +985,27 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         onMatchChanged()
     }
 
-    private fun showSetFinishedDialog(winner: ScoreEngine.Team) {
-        pendingSetWinner = winner
+    private fun showSetFinishedDialog() {
+        val last = engine.setHistory.lastOrNull() ?: return
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.main_set_finished_title)
             .setMessage(
                 getString(
                     R.string.main_set_finished_message,
-                    engine.team1Score,
-                    engine.team2Score
+                    engine.setHistory.size,
+                    last.team1,
+                    last.team2
                 )
             )
             .setCancelable(false)
             .setPositiveButton(R.string.main_set_finished_positive) { _, _ ->
-                engine.startNewSet(winner)
-                pendingSetWinner = null
+                engine.startNextSet()
                 setFinishedDialog = null
                 onMatchChanged()
             }
-            .setNegativeButton(R.string.main_set_finished_negative) { dialogView, _ ->
-                engine.declineSetCompletion()
-                pendingSetWinner = null
+            .setNegativeButton(R.string.main_set_finished_negative) { _, _ ->
+                engine.rollbackLastSet()
                 setFinishedDialog = null
-                dialogView.dismiss()
                 onMatchChanged()
             }
             .create()
@@ -1013,11 +1014,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // признак «партия завершена» навсегда уходил пульту, и кнопки там блокировались.
         dialog.setOnDismissListener {
             setFinishedDialog = null
-            pendingSetWinner = null
             broadcastRemoteState()
         }
         dialog.show()
-        // Пульт видит, что партия завершена и ждёт решения — и может принять его сам.
         broadcastRemoteState()
     }
 
@@ -1040,6 +1039,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 onMatchChanged()
             }
             .setNegativeButton(R.string.main_match_finished_negative) { dialogView, _ ->
+                // Отмена последней партии возвращает матч в игру — например, если очко начислили не той команде.
+                engine.rollbackLastSet()
                 matchFinishedDialog = null
                 dialogView.dismiss()
                 onMatchChanged()
@@ -1082,22 +1083,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 team2Name = settings.team2Name,
                 sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
                 recording = isRecordingNow,
-                bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0
+                bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0,
+                setHistory = engine.setHistory.joinToString(" ") { "${it.team1}:${it.team2}" }
             )
         )
     }
 
     /** Решение по партии, пришедшее с пульта: применяем как нажатие в диалоге. */
     private fun applyRemoteSetDecision(newSet: Boolean) {
-        val winner = pendingSetWinner ?: return
-        if (newSet) {
-            engine.startNewSet(winner)
-        } else {
-            engine.declineSetCompletion()
-        }
-        pendingSetWinner = null
+        if (newSet) engine.startNextSet() else engine.rollbackLastSet()
         setFinishedDialog?.dismiss()
         setFinishedDialog = null
+        matchFinishedDialog?.dismiss()
+        matchFinishedDialog = null
         onMatchChanged()
     }
 
@@ -1115,7 +1113,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         team1Score = engine.team1Score,
         team2Score = engine.team2Score,
         team1Sets = engine.team1Sets,
-        team2Sets = engine.team2Sets
+        team2Sets = engine.team2Sets,
+        setScores = engine.setHistory
     )
 
     private fun updateUi() {
@@ -1181,13 +1180,19 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
     private fun restoreMatchState(state: Bundle) {
         if (!state.containsKey(STATE_TEAM1_SCORE)) return
+        val first = state.getIntArray(STATE_SET1) ?: IntArray(0)
+        val second = state.getIntArray(STATE_SET2) ?: IntArray(0)
+        val history = first.indices.map { i ->
+            ScoreEngine.SetScore(first[i], second.getOrElse(i) { 0 })
+        }
         engine.restore(
             ScoreEngine.Snapshot(
                 team1Score = state.getInt(STATE_TEAM1_SCORE),
                 team2Score = state.getInt(STATE_TEAM2_SCORE),
                 team1Sets = state.getInt(STATE_TEAM1_SETS),
                 team2Sets = state.getInt(STATE_TEAM2_SETS),
-                setCompletionDeclined = state.getBoolean(STATE_DECLINED)
+                history = history,
+                awaitingNextSet = state.getBoolean(STATE_AWAITING_NEXT)
             )
         )
     }
@@ -2560,7 +2565,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         const val STATE_TEAM2_SCORE = "state_team2_score"
         const val STATE_TEAM1_SETS = "state_team1_sets"
         const val STATE_TEAM2_SETS = "state_team2_sets"
-        const val STATE_DECLINED = "state_set_declined"
+        const val STATE_SET1 = "state_set1_scores"
+        const val STATE_SET2 = "state_set2_scores"
+        const val STATE_AWAITING_NEXT = "state_awaiting_next_set"
     }
 }
 

@@ -96,8 +96,8 @@
     <string name="main_live_label">● В эфире</string>
     <string name="main_recording_label">● Запись</string>
     <string name="main_match_over_toast">Игра закончена</string>
-    <string name="main_set_finished_title">Партия завершена</string>
-    <string name="main_set_finished_message">Счёт в партии: %1$d : %2$d.\nНачать новую партию?</string>
+    <string name="main_set_finished_title">Партия засчитана</string>
+    <string name="main_set_finished_message">Партия %1$d: %2$d:%3$d. Начинаем следующую?</string>
     <string name="main_set_finished_positive">Новая партия</string>
     <string name="main_set_finished_negative">Продолжить эту</string>
     <string name="main_match_finished_title">Матч завершён</string>

@@ -2,6 +2,9 @@ package com.example.sportstreamer
 
 import android.content.res.Resources
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.core.content.res.ResourcesCompat
@@ -45,7 +48,9 @@ class ScoreOverlay(
         val team1Score: Int,
         val team2Score: Int,
         val team1Sets: Int,
-        val team2Sets: Int
+        val team2Sets: Int,
+        /** Счёт завершённых партий по порядку: 25:23, 22:25, 15:10 … */
+        val setScores: List<ScoreEngine.SetScore> = emptyList()
     )
 
     // --- Фильтры создаются один раз, при создании объекта (то есть при открытии активити). ---
@@ -57,6 +62,9 @@ class ScoreOverlay(
     private val setSecondTeam = TextObjectFilterRender()
 
     private val logoFilter = ImageObjectFilterRender()
+
+    /** Таблица счёта по партиям: одна картинка, нарисованная через Canvas. */
+    private val historyFilter = ImageObjectFilterRender()
     private val stripTeam1Filter = ImageObjectFilterRender()
     private val stripTeam2Filter = ImageObjectFilterRender()
 
@@ -69,7 +77,7 @@ class ScoreOverlay(
         setSecondTeam
     )
 
-    private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter)
+    private val imageFilters = listOf(logoFilter, stripTeam1Filter, stripTeam2Filter, historyFilter)
 
     /** Добавлены ли фильтры в GL-интерфейс: это делается один раз за активити. */
     private var attached = false
@@ -212,6 +220,9 @@ class ScoreOverlay(
         if (previous?.team2Sets != state.team2Sets) {
             setSecondTeam.setText(state.team2Sets.toString(), SET_TEXT_SIZE, TEXT_COLOR)
         }
+        if (previous?.setScores != state.setScores) {
+            applyHistory(state.setScores)
+        }
 
         appliedState = state
     }
@@ -230,6 +241,7 @@ class ScoreOverlay(
 
     /** Геометрия: порядок scale → position, поэтому повторные вызовы ничего не сдвигают. */
     private fun applyGeometry() {
+        // Плашку растягиваем по числу сыгранных партий: см. applyHistory().
         logoFilter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
         logoFilter.setPosition(LOGO_X, LOGO_Y)
 
@@ -255,6 +267,52 @@ class ScoreOverlay(
     ) {
         filter.setScale(scaleX, scaleY)
         filter.setPosition(x, y)
+    }
+
+    /**
+     * Рисует таблицу счёта по партиям и удлиняет под неё плашку.
+     *
+     * Столбцов ровно столько, сколько партий сыграно: будущие партии не резервируются.
+     * Плашка растёт вправо, левый край остаётся на месте — поэтому позиция сдвигается
+     * на половину прироста (позиция спрайта задаёт его центр).
+     */
+    private fun applyHistory(scores: List<ScoreEngine.SetScore>) {
+        val columns = scores.size
+        val grownScale = LOGO_SCALE_X + columns * HISTORY_STEP_X
+        logoFilter.setScale(grownScale, LOGO_SCALE_Y)
+        logoFilter.setPosition(LOGO_X + (grownScale - LOGO_SCALE_X) / 2f, LOGO_Y)
+
+        if (columns == 0) {
+            // Пустая история — прячем таблицу полностью: прозрачная точка вместо картинки.
+            historyFilter.setImage(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
+            return
+        }
+
+        historyFilter.setImage(drawHistoryBitmap(scores))
+        val width = columns * HISTORY_CELL_SCALE_X
+        historyFilter.setScale(width, HISTORY_CELL_SCALE_Y)
+        historyFilter.setPosition(HISTORY_X + width / 2f, HISTORY_Y)
+    }
+
+    /** Таблица в две строки: верхняя — первая команда, нижняя — вторая. */
+    private fun drawHistoryBitmap(scores: List<ScoreEngine.SetScore>): Bitmap {
+        val width = scores.size * HISTORY_CELL_PX
+        val height = HISTORY_CELL_PX * 2
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = TEXT_COLOR
+            textAlign = Paint.Align.CENTER
+            textSize = HISTORY_CELL_PX * 0.52f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }
+        val centerY = HISTORY_CELL_PX * 0.72f
+        scores.forEachIndexed { index, score ->
+            val centerX = index * HISTORY_CELL_PX + HISTORY_CELL_PX / 2f
+            canvas.drawText(score.team1.toString(), centerX, centerY, paint)
+            canvas.drawText(score.team2.toString(), centerX, centerY + HISTORY_CELL_PX, paint)
+        }
+        return bitmap
     }
 
     /** Красит полосу команды: картинка меняется у уже существующего фильтра. */
@@ -312,5 +370,17 @@ class ScoreOverlay(
 
         const val TITLE_CHARS = 16
         const val SCORE_CHARS = 2
+
+        // --- Таблица счёта по партиям ---
+        /** Ширина одного столбца таблицы в единицах оверлея (плашка растёт на столько же). */
+        const val HISTORY_STEP_X = 3.2f
+        /** Ширина того же столбца, но для картинки таблицы: подбирается под единицы оверлея. */
+        const val HISTORY_CELL_SCALE_X = 3.2f
+        const val HISTORY_CELL_SCALE_Y = 6f
+        /** Левый край таблицы: сразу за счётом текущей партии. */
+        const val HISTORY_X = 27f
+        const val HISTORY_Y = 87f
+        /** Размер клетки таблицы в пикселях текстуры. */
+        const val HISTORY_CELL_PX = 120
     }
 }

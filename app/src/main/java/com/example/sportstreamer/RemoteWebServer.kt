@@ -203,6 +203,7 @@ class RemoteWebServer(
   #score { text-align:center; font-size:22px; padding:8px 0 4px; }
   #bitrate { text-align:center; font-size:16px; color:#555; padding:0 0 4px; }
   #wake { text-align:center; font-size:14px; color:#777; padding:0 0 12px; }
+  #sethistory { text-align:center; font-size:15px; color:#333; padding:0 0 8px; }
   .teams { display:flex; gap:12px; padding:0 16px 24px; }
   .team { flex:1; background:#fff; border-radius:20px; padding:16px; text-align:center;
           box-shadow:0 2px 8px rgba(0,0,0,.08); }
@@ -217,6 +218,7 @@ class RemoteWebServer(
 <header>SportStreamer — пульт</header>
 <div id="score">загрузка…</div>
 <div id="bitrate">битрейт: —</div>
+<div id="sethistory"></div>
 <div id="wake"></div>
 <div class="teams">
   <div class="team">
@@ -281,11 +283,11 @@ async function tick() {
     const d = el('decision');
     if (s.setPending) {
       d.innerHTML = decisionButton('Новая партия', '/set-decision?newSet=1') +
-                    decisionButton('Продолжить', '/set-decision?newSet=0');
+                    decisionButton('Отменить партию', '/set-decision?newSet=0');
       el('status').textContent = 'партия завершена — решите здесь или на телефоне';
     } else if (s.matchPending) {
       d.innerHTML = decisionButton('Новая игра', '/match-decision?again=1') +
-                    decisionButton('Закрыть', '/match-decision?again=0');
+                    decisionButton('Отменить партию', '/match-decision?again=0');
       el('status').textContent = 'матч завершён — решите здесь или на телефоне';
     } else {
       d.innerHTML = '';
@@ -298,7 +300,8 @@ let wakeLock = null;
 async function keepAwake() {
   try {
     if (!('wakeLock' in navigator)) {
-      el('wake').textContent = 'браузер не умеет удерживать экран';
+      el('sethistory').textContent = s.setHistory ? 'партии: ' + s.setHistory : '';
+    el('wake').textContent = 'браузер не умеет удерживать экран';
       return;
     }
     wakeLock = await navigator.wakeLock.request('screen');
