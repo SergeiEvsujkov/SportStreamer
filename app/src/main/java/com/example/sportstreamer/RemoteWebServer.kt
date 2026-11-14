@@ -295,7 +295,7 @@ async function tick() {
     const d = el('decision');
     if (s.setPending) {
       d.innerHTML = decisionButton('Новая партия', '/set-decision?newSet=1') +
-                    decisionButton('Продолжить', '/set-decision?newSet=0');
+                    decisionButton('Отменить завершение партии', '/set-decision?newSet=0');
       el('status').textContent = 'партия засчитана — начните следующую или отмените завершение';
     } else if (s.matchPending) {
       d.innerHTML = decisionButton('Новая игра', '/match-decision?again=1') +
