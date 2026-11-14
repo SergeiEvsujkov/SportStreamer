@@ -696,7 +696,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                         sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
                         recording = isRecordingNow,
                         bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0,
-                        setHistory = engine.setHistory.joinToString(" ") { "${it.team1}:${it.team2}" }
+                        setHistory = engine.setHistory.joinToString(" ") { "%02d:%02d".format(it.team1, it.team2) },
+                        awaitingNextSet = engine.isAwaitingNextSet
                     )
                 },
                 pointHandler = { team, add ->
@@ -1090,7 +1091,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
                 sessionActive = rtmpCamera2?.isStreaming == true || isRecordingNow,
                 recording = isRecordingNow,
                 bitrateKbps = if (rtmpCamera2?.isStreaming == true) currentBitrateKbps else 0,
-                setHistory = engine.setHistory.joinToString(" ") { "${it.team1}:${it.team2}" }
+                setHistory = engine.setHistory.joinToString(" ") { "%02d:%02d".format(it.team1, it.team2) },
+                awaitingNextSet = engine.isAwaitingNextSet
             )
         )
     }
