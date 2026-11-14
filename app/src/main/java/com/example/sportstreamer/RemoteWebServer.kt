@@ -255,7 +255,7 @@ async function post(path) {
 }
 function sessionButton() {
   if (!s.sessionActive) {
-    return '<button onclick="post(\'/session-start\')">Начать</button>';
+    return '<button onclick="post(\'/session-start\')">Начать запись</button>';
   }
   return '<button onclick="if (confirm(\'Остановить трансляцию и запись?\')) post(\'/session-stop\')">Остановить</button>';
 }
@@ -293,8 +293,9 @@ async function tick() {
     el('n1').textContent = s.team1Name || 'Команда 1';
     el('n2').textContent = s.team2Name || 'Команда 2';
     el('score').textContent = 'Партии ' + s.s1 + ':' + s.s2 +
-        ' · счёт ' + s.t1 + ':' + s.t2 + ' · партия ' + s.game + ' из ' + (s.setsToWin*2-1);
+        ' · партия ' + s.game + ' из ' + (s.setsToWin*2-1);
     el('session').innerHTML = sessionButton();
+    renderSets(s);
 
     const d = el('decision');
     if (s.setPending) {
