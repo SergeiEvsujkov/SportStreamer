@@ -1815,8 +1815,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         recordingPart = 0
         if (!startLocalRecording()) return
-        // startRecord() при отсутствии эфира пересобирает GL: возвращаем надписи без
-        // clearFilters(), чтобы плашка не мигала.
+        // startRecord() при отсутствии эфира пересобирает GL: в новом контексте текстуры
+        // пустые. Сами фильтры при этом остаются добавленными, поэтому пересобирать их
+        // не нужно — достаточно заново отдать картинки и надписи.
+        overlay?.reloadTextures()
         refreshOverlay()
         updateUi()
     }
