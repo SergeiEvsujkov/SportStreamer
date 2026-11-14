@@ -1815,11 +1815,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         recordingPart = 0
         if (!startLocalRecording()) return
-        // startRecord() при отсутствии эфира пересобирает GL: в новом контексте текстуры
-        // пустые, а фильтры остаются добавленными. Поэтому не пересобираем их (это давало
-        // чёрный кадр), а ждём запуска GL и только затем отдаём картинки и надписи заново.
-        overlay?.reloadTextures()
-        attachOverlayWhenGlReady()
+        // startRecord() при отсутствии эфира пересобирает GL: возвращаем надписи без
+        // clearFilters(), чтобы плашка не мигала.
+        refreshOverlay()
         updateUi()
     }
 
