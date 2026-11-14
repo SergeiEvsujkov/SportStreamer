@@ -203,6 +203,9 @@ class RemoteWebServer(
   header { padding:16px; text-align:center; font-size:20px; color:#6750a4; }
   #score { text-align:center; font-size:22px; padding:8px 0 4px; }
   #bitrate { text-align:center; font-size:16px; color:#555; padding:0 0 4px; }
+  #sets { text-align:center; padding:0 0 8px; }
+  #sets .col { display:inline-block; min-width:46px; margin:0 4px; font-size:16px;
+               line-height:1.25; font-variant-numeric:tabular-nums; }
   #wake { text-align:center; font-size:14px; color:#777; padding:0 0 12px; }
   .teams { display:flex; gap:12px; padding:0 16px 24px; }
   .team { flex:1; background:#fff; border-radius:20px; padding:16px; text-align:center;
@@ -217,6 +220,7 @@ class RemoteWebServer(
 <body>
 <header>SportStreamer — пульт</header>
 <div id="score">загрузка…</div>
+<div id="sets"></div>
 <div id="bitrate">битрейт: —</div>
 <div id="wake"></div>
 <div class="teams">
