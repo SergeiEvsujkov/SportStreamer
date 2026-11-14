@@ -1455,8 +1455,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         previewRunning = camera.isOnPreview
         if (previewRunning) {
             // prepareVideo() пересобирает GL: фильтры потеряны, признак подключения — нет.
+            // Подключаем после готовности GL: attach сразу после пересборки давал чёрный кадр.
             overlay?.invalidate()
-            refreshOverlay()
+            attachOverlayWhenGlReady()
         } else {
             ensurePreview(camera)
         }
