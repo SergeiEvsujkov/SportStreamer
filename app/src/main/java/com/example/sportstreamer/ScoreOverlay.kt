@@ -116,22 +116,31 @@ class ScoreOverlay(
     /** Сколько партий было при последней установке картинки плашки. */
     private var plaqueSets = -1
 
-    /** Картинка плашки под число сыгранных партий. */
-    private fun plaqueDrawable(sets: Int): Int = when (sets) {
-        // Плиток на картинке = колонок на табло = сыгранные партии + текущая.
-        0 -> R.drawable.score_title      // одна плитка: идёт первая партия
-        1 -> R.drawable.score_title_2    // две: закрытая + текущая
-        2 -> R.drawable.score_title_3
-        3 -> R.drawable.score_title_4
+    /**
+     * Картинка плашки под число колонок на табло.
+     *
+     * Колонки = завершённые партии + текущая; после конца матча текущей нет.
+     * Именно это число сюда и передаётся, поэтому картинка всегда совпадает с табло.
+     */
+    private fun plaqueDrawable(columns: Int): Int = when (columns.coerceIn(1, MAX_SETS)) {
+        1 -> R.drawable.score_title
+        2 -> R.drawable.score_title_2
+        3 -> R.drawable.score_title_3
+        4 -> R.drawable.score_title_4
         else -> R.drawable.score_title_5
     }
+
+    /** Число колонок на табло: сыгранные партии плюс текущая, если матч не закончен. */
+    private fun columnCount(state: State): Int =
+        (state.team1Sets + state.team2Sets + if (state.matchOver) 0 else 1)
+            .coerceIn(1, MAX_SETS)
 
     /**
      * Декодирует фон плашки заново: битмап после загрузки текстуры библиотека перерабатывает.
      * [sets] выбирает картинку: у каждой сыгранной партии своя плитка.
      */
-    private fun applyLogoImage(sets: Int) {
-        val resId = plaqueDrawable(sets)
+    private fun applyLogoImage(columns: Int) {
+        val resId = plaqueDrawable(columns)
         val bitmap = BitmapFactory.decodeResource(resources, resId)
         if (bitmap == null) {
             Log.w(TAG, "Плашка $resId недоступна — оверлей без плашки")
@@ -151,7 +160,7 @@ class ScoreOverlay(
         logoFilter.setScale(scaleX, LOGO_SCALE_Y)
         logoFilter.setPosition(LOGO_X, LOGO_Y)
 
-        Log.i(TAG, "плашка: sets=$sets, res=$resId, bmp=${bitmap.width}x${bitmap.height}, scaleX=$scaleX")
+        Log.i(TAG, "плашка: колонок=$columns, res=$resId, bmp=${bitmap.width}x${bitmap.height}, scaleX=$scaleX")
     }
 
     /**
@@ -205,11 +214,11 @@ class ScoreOverlay(
             applyStripImage(stripTeam2Filter, R.drawable.color_team2, team2Color)
             team2ColorApplied = team2Color
         }
-        val setsNow = state.team1Sets + state.team2Sets
-        if (reattached || !logoApplied || setsNow != plaqueSets) {
-            applyLogoImage(setsNow)
+        val columnsNow = columnCount(state)
+        if (reattached || !logoApplied || columnsNow != plaqueSets) {
+            applyLogoImage(columnsNow)
             logoApplied = true
-            plaqueSets = setsNow
+            plaqueSets = columnsNow
         }
 
         applyGeometry()
@@ -255,10 +264,10 @@ class ScoreOverlay(
         // Колонка текущей партии показывает живой счёт, поэтому обновляем на каждое изменение.
         updateSetColumns(state)
 
-        val setsTotal = state.team1Sets + state.team2Sets
-        if (logoApplied && setsTotal != plaqueSets) {
-            applyLogoImage(setsTotal)
-            plaqueSets = setsTotal
+        val columnsTotal = columnCount(state)
+        if (logoApplied && columnsTotal != plaqueSets) {
+            applyLogoImage(columnsTotal)
+            plaqueSets = columnsTotal
         }
 
         appliedState = state
