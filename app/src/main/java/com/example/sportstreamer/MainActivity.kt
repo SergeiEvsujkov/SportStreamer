@@ -1455,9 +1455,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         previewRunning = camera.isOnPreview
         if (previewRunning) {
             // prepareVideo() пересобирает GL: фильтры потеряны, признак подключения — нет.
-            // Подключаем после готовности GL: attach сразу после пересборки давал чёрный кадр.
             overlay?.invalidate()
-            attachOverlayWhenGlReady()
+            refreshOverlay()
         } else {
             ensurePreview(camera)
         }
@@ -1816,13 +1815,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         recordingPart = 0
         if (!startLocalRecording()) return
-        // startRecord() при отсутствии эфира пересобирает GL и останавливает превью.
-        // Синхронизируем флаг с библиотекой и при необходимости поднимаем превью заново —
-        // иначе экран остаётся чёрным, хотя запись уже идёт.
-        previewRunning = camera.isOnPreview
-        if (!previewRunning) ensurePreview(camera)
-        overlay?.invalidate()
-        attachOverlayWhenGlReady()
+        // startRecord() при отсутствии эфира пересобирает GL: возвращаем надписи без
+        // clearFilters(), чтобы плашка не мигала.
+        refreshOverlay()
         updateUi()
     }
 
