@@ -219,14 +219,17 @@ class ScoreOverlay(
             applyStripImage(stripTeam2Filter, R.drawable.color_team2, team2Color)
             team2ColorApplied = team2Color
         }
+        // Сначала общая геометрия (полосы и надписи), потом плашка: applyGeometry задаёт
+        // логотипу базовый масштаб 27, и если вызвать её после плашки, широкий вариант
+        // сбрасывается к базовому — плашка становится короче, чем нужно.
+        applyGeometry()
+
         val setsNow = state.team1Sets + state.team2Sets
         if (reattached || !logoApplied || setsNow != plaqueSets) {
             applyLogoImage(setsNow)
             logoApplied = true
             plaqueSets = setsNow
         }
-
-        applyGeometry()
         // В новом GL-контексте текстуры надписей тоже пустые: сбрасываем кэш и отдаём все
         // шесть надписей заново через setText. При обычной смене счёта трогается один фильтр.
         appliedState = null
