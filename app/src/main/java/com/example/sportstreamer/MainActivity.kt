@@ -1815,8 +1815,10 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         recordingPart = 0
         if (!startLocalRecording()) return
-        // startRecord() при отсутствии эфира пересобирает GL: возвращаем надписи без
-        // clearFilters(), чтобы плашка не мигала.
+        // startRecord() при отсутствии эфира пересобирает GL: в новом контексте старые
+        // текстуры недействительны. invalidate() заставляет attach() заново добавить фильтры
+        // и заново поставить картинку плашки — иначе остаётся прежняя, «не та».
+        overlay?.invalidate()
         refreshOverlay()
         updateUi()
     }
