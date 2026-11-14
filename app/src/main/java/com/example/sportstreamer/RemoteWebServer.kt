@@ -298,8 +298,9 @@ async function tick() {
                     decisionButton('Отменить завершение партии', '/set-decision?newSet=0');
       el('status').textContent = 'партия засчитана — начните следующую или отмените завершение';
     } else if (s.matchPending) {
-      d.innerHTML = decisionButton('Новая игра', '/match-decision?again=1') +
-                    decisionButton('Закрыть', '/match-decision?again=0');
+      d.innerHTML = decisionButton('Новая игра', '/match-decision?action=new') +
+                    decisionButton('Отменить завершение партии', '/match-decision?action=rollback') +
+                    decisionButton('Закрыть', '/match-decision?action=close');
       el('status').textContent = 'матч завершён — новая игра, отмена партии или закрыть';
     } else {
       d.innerHTML = '';
