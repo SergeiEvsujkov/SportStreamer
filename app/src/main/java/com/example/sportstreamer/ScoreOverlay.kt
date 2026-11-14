@@ -169,6 +169,20 @@ class ScoreOverlay(
      * вызывает `filter.initGl(...)`, то есть те же экземпляры корректно инициализируются
      * в новом GL-контексте.
      */
+    /**
+     * Переставляет картинку плашки в текущем состоянии.
+     *
+     * Нужен после пересборки GL при старте записи: фильтры остаются на месте,
+     * меняется только текстура плашки — так же, как при смене числа партий.
+     */
+    fun refreshPlaque() {
+        val state = appliedState ?: return
+        val sets = state.team1Sets + state.team2Sets
+        applyLogoImage(sets)
+        plaqueSets = sets
+        logoApplied = true
+    }
+
     fun invalidate() {
         attached = false
         appliedState = null

@@ -1817,6 +1817,9 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         if (!startLocalRecording()) return
         // startRecord() при отсутствии эфира пересобирает GL: возвращаем надписи без
         // clearFilters(), чтобы плашка не мигала.
+        // startRecord() пересобирает GL: текстура плашки в новом контексте старая.
+        // Переставляем только картинку — фильтры не пересобираем.
+        overlay?.refreshPlaque()
         refreshOverlay()
         updateUi()
     }
