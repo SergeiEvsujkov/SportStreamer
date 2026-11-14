@@ -116,6 +116,9 @@ class ScoreOverlay(
     /** Сколько партий было при последней установке картинки плашки. */
     private var plaqueSets = -1
 
+    /** Главный поток: повторно применяем геометрию после загрузки текстуры. */
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     /** Картинка плашки под число сыгранных партий. */
     private fun plaqueDrawable(sets: Int): Int = when (sets) {
         // Плиток на картинке = колонок на табло = сыгранные партии + текущая.
@@ -150,6 +153,13 @@ class ScoreOverlay(
         // Позиция — это левый край, а не центр: компенсация сдвигала плашку вправо.
         logoFilter.setScale(scaleX, LOGO_SCALE_Y)
         logoFilter.setPosition(LOGO_X, LOGO_Y)
+
+        // Текстура грузится в GL-потоке уже после setImage и инициализирует спрайт заново,
+        // сбрасывая наш масштаб. Поэтому применяем геометрию ещё раз, когда загрузка прошла.
+        uiHandler.postDelayed({
+            logoFilter.setScale(scaleX, LOGO_SCALE_Y)
+            logoFilter.setPosition(LOGO_X, LOGO_Y)
+        }, PLAQUE_GEOMETRY_RETRY_MS)
 
         Log.i(TAG, "плашка: sets=$sets, res=$resId, bmp=${bitmap.width}x${bitmap.height}, scaleX=$scaleX")
     }
@@ -450,6 +460,9 @@ class ScoreOverlay(
         const val HISTORY_STEP_X = 2.7f
         const val HISTORY_SCALE_X = 2f
         const val HISTORY_TEXT_SIZE = 2000f
+
+        /** Задержка повторного применения геометрии плашки после загрузки текстуры. */
+        const val PLAQUE_GEOMETRY_RETRY_MS = 250L
 
         /** Ширина базовой плашки score_title.png в пикселях исходника (558). */
         const val BASE_PLAQUE_WIDTH_PX = 558f
