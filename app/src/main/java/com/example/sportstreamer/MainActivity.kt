@@ -1816,10 +1816,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         }
         recordingPart = 0
         if (!startLocalRecording()) return
-        // startRecord() при отсутствии эфира пересобирает GL: в новом контексте старые
-        // текстуры недействительны, поэтому оверлей надо подключить заново.
-        // Важно ждать готовности GL: attach() сразу после startRecord() попадал в ещё
-        // не поднятый контекст и давал чёрный кадр.
+        // startRecord() при отсутствии эфира пересобирает GL и останавливает превью.
+        // Синхронизируем флаг с библиотекой и при необходимости поднимаем превью заново —
+        // иначе экран остаётся чёрным, хотя запись уже идёт.
+        previewRunning = camera.isOnPreview
+        if (!previewRunning) ensurePreview(camera)
         overlay?.invalidate()
         attachOverlayWhenGlReady()
         updateUi()
