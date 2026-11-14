@@ -353,8 +353,9 @@ class ScoreOverlay(
 
     /** Геометрия: порядок scale → position, поэтому повторные вызовы ничего не сдвигают. */
     private fun applyGeometry() {
-        logoFilter.setScale(LOGO_SCALE_X, LOGO_SCALE_Y)
-        logoFilter.setPosition(LOGO_X, LOGO_Y)
+        // Геометрию плашки задаёт только applyLogoImage(): там масштаб считается
+        // от ширины картинки. Здесь её трогать нельзя — иначе широкий вариант
+        // сбрасывается к базовому и плашка выходит короткой.
 
         stripTeam1Filter.setScale(STRIP_SCALE_X, STRIP_SCALE_Y)
         stripTeam1Filter.setPosition(STRIP_X, STRIP_TEAM1_Y)
