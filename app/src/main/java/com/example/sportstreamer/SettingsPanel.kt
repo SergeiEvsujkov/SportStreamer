@@ -419,6 +419,8 @@ class SettingsPanel(
             binding.rbRes1080.isChecked = true
         }
         binding.rgStreamResolution.setOnCheckedChangeListener { _, _ -> persistSettings() }
+        binding.switchAdaptiveBitrate.isChecked = settings.adaptiveBitrate
+        binding.switchAdaptiveBitrate.setOnCheckedChangeListener { _, _ -> persistSettings() }
 
         binding.switchStabilization.isChecked = settings.videoStabilization
         binding.switchAutoExposure.isChecked = settings.autoExposure
@@ -496,6 +498,7 @@ class SettingsPanel(
                     binding.rbBitrate3.isChecked -> 3
                     else -> RecordingBitrate.DEFAULT_MBPS
                 },
+                adaptiveBitrate = binding.switchAdaptiveBitrate.isChecked,
                 streamHeight = if (binding.rbRes720.isChecked) {
                     StreamResolution.HD720
                 } else {

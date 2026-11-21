@@ -21,6 +21,13 @@ data class SettingsLoc(
     val startMode: Int = StartMode.BOTH,
     /** Делить запись на части: 0 — не делить, иначе длина части в минутах. */
     val splitMinutes: Int = RecordingParts.NO_SPLIT,
+    /**
+     * Подстраивать битрейт под сеть.
+     *
+     * Выключено — битрейт фиксированный: при стабильном Wi-Fi картинка ровнее,
+     * без просадок качества на кратковременных всплесках.
+     */
+    val adaptiveBitrate: Boolean = true,
     /** Разрешение эфира: [StreamResolution.HD720] или [StreamResolution.FULL_HD]. */
     val streamHeight: Int = StreamResolution.FULL_HD,
     /** Битрейт записи в память, Мбит/с: 1, 3 или 5. Действует, когда трансляция выключена. */
@@ -69,6 +76,7 @@ object SettingsRepository {
     private const val KEY_BROADCAST_ENABLED = "broadcast_enabled"
     private const val KEY_SPLIT_MINUTES = "split_minutes"
     private const val KEY_STREAM_HEIGHT = "stream_height"
+    private const val KEY_ADAPTIVE_BITRATE = "adaptive_bitrate"
     private const val KEY_RECORD_BITRATE = "record_bitrate_mbps"
     private const val KEY_START_MODE = "start_mode"
     private const val KEY_THEME_MODE = "theme_mode"
@@ -114,6 +122,7 @@ object SettingsRepository {
             startMode = startMode,
             splitMinutes = prefs.getInt(KEY_SPLIT_MINUTES, RecordingParts.NO_SPLIT),
             recordBitrateMbps = prefs.getInt(KEY_RECORD_BITRATE, RecordingBitrate.DEFAULT_MBPS),
+            adaptiveBitrate = prefs.getBoolean(KEY_ADAPTIVE_BITRATE, true),
             streamHeight = StreamResolution.sanitize(
                 prefs.getInt(KEY_STREAM_HEIGHT, StreamResolution.FULL_HD)
             ),
@@ -140,6 +149,7 @@ object SettingsRepository {
             .putInt(KEY_SPLIT_MINUTES, settings.splitMinutes)
             .putInt(KEY_RECORD_BITRATE, settings.recordBitrateMbps)
             .putInt(KEY_STREAM_HEIGHT, StreamResolution.sanitize(settings.streamHeight))
+            .putBoolean(KEY_ADAPTIVE_BITRATE, settings.adaptiveBitrate)
             .putInt(KEY_THEME_MODE, settings.themeMode)
             .putBoolean(KEY_VIDEO_STABILIZATION, settings.videoStabilization)
             .putBoolean(KEY_AUTO_EXPOSURE, settings.autoExposure)

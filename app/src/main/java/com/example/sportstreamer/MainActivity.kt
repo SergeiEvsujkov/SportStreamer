@@ -1315,6 +1315,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // Потолок зависит от разрешения эфира: 720p не нужны 1080p-мегабиты,
         // а каждый лишний мегабит — это лишний нагрев телефона.
         bitrateAdapter.maxBitrate = StreamResolution.maxBitrate(videoHeight)
+        // Фиксированный битрейт: адаптер только считает статистику, цель не меняет.
+        bitrateAdapter.adaptive = settings.adaptiveBitrate
         val videoPrepared = when {
             dual -> camera.prepareVideo(
                 StreamConfig.STREAM_WIDTH,
@@ -1975,6 +1977,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
 
         bitrateAdapter.reset(SystemClock.elapsedRealtime(), safeBytesSent(camera))
         handler.removeCallbacks(bitrateTicker)
+        // В фиксированном режиме цель не меняется: остаётся стартовый битрейт профиля.
         handler.postDelayed(bitrateTicker, BitrateAdapter.UPDATE_INTERVAL_MS)
 
         updateUi()

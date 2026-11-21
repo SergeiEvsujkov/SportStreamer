@@ -49,6 +49,12 @@ class BitrateAdapter(
     val effectiveMax: Int
         get() = (maxBitrate * thermalFactor).toInt().coerceAtLeast(minBitrate)
 
+    /**
+     * Адаптировать битрейт под сеть. Выключено — цель не меняется: остаётся та,
+     * что выставлена при старте эфира (стартовый битрейт профиля).
+     */
+    var adaptive: Boolean = true
+
     var targetBitrate: Int = initialBitrate.coerceIn(minBitrate, effectiveMax)
         private set
 
@@ -85,7 +91,9 @@ class BitrateAdapter(
         val actualBitrate = (bytesSent * 8 * 1000 / elapsedMs).toInt()
         val smoothed = smooth(nextBitrate(actualBitrate))
 
-        val newTarget = if (abs(smoothed - targetBitrate) < HYSTERESIS_BITS) {
+        val newTarget = if (!adaptive) {
+            null
+        } else if (abs(smoothed - targetBitrate) < HYSTERESIS_BITS) {
             null
         } else {
             targetBitrate = smoothed
