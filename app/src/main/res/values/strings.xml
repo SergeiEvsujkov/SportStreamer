@@ -33,7 +33,7 @@
     <string name="settings_stream_resolution_1080">1080p — чётче, больше нагрузки</string>
     <string name="settings_stream_resolution_hint">Общее для эфира и записи. Применяется при следующем запуске.</string>
     <string name="settings_adaptive_bitrate_label">Адаптивный битрейт</string>
-    <string name="settings_adaptive_bitrate_hint">Подстраивает битрейт под сеть, чтобы картинка не рассыпалась при просадках. Выключите при стабильном Wi-Fi — качество будет ровнее, но при слабой сети возможны рывки.</string>
+    <string name="settings_adaptive_bitrate_hint">Подстраивает битрейт под сеть, чтобы картинка не рассыпалась при просадках. Выключено — битрейт фиксированный: 5 Мбит/с для 1080p и 3 Мбит/с для 720p.</string>
     <string name="settings_camera_header">КАМЕРА</string>
     <string name="settings_stabilization_label">Стабилизация изображения</string>
     <string name="settings_stabilization_hint">Сглаживает дрожание камеры. Работает, если устройство поддерживает электронную стабилизацию; на некоторых моделях она отключается при сильном приближении.</string>

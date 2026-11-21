@@ -58,6 +58,11 @@ class BitrateAdapter(
     var targetBitrate: Int = initialBitrate.coerceIn(minBitrate, effectiveMax)
         private set
 
+    /** Задать целевой битрейт напрямую — используется в режиме без адаптации. */
+    fun setFixedTarget(bitrate: Int) {
+        targetBitrate = bitrate.coerceIn(minBitrate, effectiveMax)
+    }
+
     private val history = ArrayDeque<Int>()
     private var lastUpdateTimeMs = 0L
     private var lastSentBytes = 0L

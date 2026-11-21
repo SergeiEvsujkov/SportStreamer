@@ -34,6 +34,12 @@ object StreamConfig {
      */
     const val MAX_BITRATE_720P = 4_000 * 1024
 
+    /** Фиксированный битрейт при выключенной адаптации: 720p — 3 Мбит/с. */
+    const val FIXED_BITRATE_720P = 3_000 * 1024
+
+    /** Фиксированный битрейт при выключенной адаптации: 1080p — 5 Мбит/с. */
+    const val FIXED_BITRATE_1080P = 5_000 * 1024
+
     /** 1080p-эфир (режим без записи) — верхняя граница 6 Мбит/с. */
     const val MAX_BITRATE_1080P = 6_000 * 1024
 
@@ -84,4 +90,11 @@ object StreamResolution {
 
     fun maxBitrate(height: Int): Int =
         if (sanitize(height) == FULL_HD) StreamConfig.MAX_BITRATE_1080P else StreamConfig.MAX_BITRATE_720P
+
+    /**
+     * Битрейт для режима без адаптации: заметно выше потолка 720p и близко к рабочему
+     * значению 1080p, но без просадок на кратковременных всплесках сети.
+     */
+    fun fixedBitrate(height: Int): Int =
+        if (sanitize(height) == FULL_HD) StreamConfig.FIXED_BITRATE_1080P else StreamConfig.FIXED_BITRATE_720P
 }

@@ -1316,7 +1316,11 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // а каждый лишний мегабит — это лишний нагрев телефона.
         bitrateAdapter.maxBitrate = StreamResolution.maxBitrate(videoHeight)
         // Фиксированный битрейт: адаптер только считает статистику, цель не меняет.
+        // Значение зависит от разрешения: 720p — 3 Мбит/с, 1080p — 5 Мбит/с.
         bitrateAdapter.adaptive = settings.adaptiveBitrate
+        if (!settings.adaptiveBitrate) {
+            bitrateAdapter.setFixedTarget(StreamResolution.fixedBitrate(videoHeight))
+        }
         val videoPrepared = when {
             dual -> camera.prepareVideo(
                 StreamConfig.STREAM_WIDTH,
