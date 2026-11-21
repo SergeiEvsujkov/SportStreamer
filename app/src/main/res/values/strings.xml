@@ -82,7 +82,7 @@
     <string name="settings_bitrate_1">1 Мбит/с — экономно</string>
     <string name="settings_bitrate_3">3 Мбит/с — обычный</string>
     <string name="settings_bitrate_5">5 Мбит/с — лучшее качество</string>
-    <string name="settings_record_bitrate_hint">Во время эфира запись идёт отдельным энкодером в 1080p, а эфир — в 720p, поэтому битрейт записи от сети не зависит. Примерно 7 МБ в минуту на 1 Мбит/с: 1 — 7 МБ, 3 — 22 МБ, 5 — 37 МБ.</string>
+    <string name="settings_record_bitrate_hint">Битрейт действует только при записи без эфира. Во время эфира файл пишется тем же потоком, что уходит в сеть, и берёт битрейт эфира. Примерно 7 МБ в минуту на 1 Мбит/с: 1 — 7 МБ, 3 — 22 МБ, 5 — 37 МБ.</string>
     <string name="desc_toggle_recording">Начать или остановить запись</string>
     <string name="main_nothing_selected">В настройках не выбрано ни трансляция, ни сохранение в память</string>
     <string name="main_stream_lost_keep_recording">Связь с сервером потеряна — запись продолжается</string>
