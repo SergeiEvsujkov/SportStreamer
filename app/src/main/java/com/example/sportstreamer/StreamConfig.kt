@@ -50,7 +50,11 @@ object StreamConfig {
      */
     const val AUDIO_SAMPLE_RATE = 32_000
 
-    const val AUDIO_IS_STEREO = true
+    /**
+     * Моно: микрофон у телефона один, второй канал лишь дублирует его или добавляет
+     * перекос между встроенными микрофонами. Стерео нужно только с внешним микрофоном.
+     */
+    const val AUDIO_IS_STEREO = false
 
     /**
      * Эхоподавление выключено, как в SportCam.
