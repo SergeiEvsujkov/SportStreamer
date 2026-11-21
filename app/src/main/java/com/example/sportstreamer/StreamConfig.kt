@@ -41,8 +41,24 @@ object StreamConfig {
     const val MAX_BITRATE = MAX_BITRATE_1080P
 
     const val AUDIO_BITRATE = 128_000
-    const val AUDIO_SAMPLE_RATE = 44_100
+
+    /**
+     * 32 кГц, как в SportCam.
+     *
+     * 44.1 кГц для микрофона телефона ничего не добавляет: выше 16 кГц в зале почти
+     * нет полезного сигнала, а лишняя полоса только грузит кодировщик.
+     */
+    const val AUDIO_SAMPLE_RATE = 32_000
+
     const val AUDIO_IS_STEREO = true
-    const val AUDIO_ECHO_CANCELER = true
+
+    /**
+     * Эхоподавление выключено, как в SportCam.
+     *
+     * AcousticEchoCanceler тянет за собой адаптивный фильтр и автоматическую
+     * регулировку усиления: уровень плавает «волнами». Без него запись ровнее.
+     */
+    const val AUDIO_ECHO_CANCELER = false
+
     const val AUDIO_NOISE_SUPPRESSOR = false
 }
