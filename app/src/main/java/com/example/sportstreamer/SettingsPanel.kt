@@ -413,6 +413,13 @@ class SettingsPanel(
         }
         selectedThemeMode = settings.themeMode
 
+        if (settings.streamHeight == StreamResolution.HD720) {
+            binding.rbRes720.isChecked = true
+        } else {
+            binding.rbRes1080.isChecked = true
+        }
+        binding.rgStreamResolution.setOnCheckedChangeListener { _, _ -> persistSettings() }
+
         binding.switchStabilization.isChecked = settings.videoStabilization
         binding.switchAutoExposure.isChecked = settings.autoExposure
         binding.brightnessSlider.value = settings.exposureCompensation.toFloat()
@@ -488,6 +495,11 @@ class SettingsPanel(
                     binding.rbBitrate1.isChecked -> 1
                     binding.rbBitrate3.isChecked -> 3
                     else -> RecordingBitrate.DEFAULT_MBPS
+                },
+                streamHeight = if (binding.rbRes720.isChecked) {
+                    StreamResolution.HD720
+                } else {
+                    StreamResolution.FULL_HD
                 },
                 videoStabilization = binding.switchStabilization.isChecked,
                 autoExposure = binding.switchAutoExposure.isChecked,

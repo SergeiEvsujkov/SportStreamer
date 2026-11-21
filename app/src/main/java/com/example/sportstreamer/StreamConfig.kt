@@ -66,3 +66,22 @@ object StreamConfig {
 
     const val AUDIO_NOISE_SUPPRESSOR = false
 }
+
+/**
+ * Разрешение эфира, выбирается в настройках.
+ *
+ * Хранится как высота кадра: 720 или 1080. Ширина и потолок битрейта выводятся из неё,
+ * чтобы профиль нельзя было «собрать» из несогласованных чисел.
+ */
+object StreamResolution {
+
+    const val HD720 = 720
+    const val FULL_HD = 1080
+
+    fun sanitize(height: Int): Int = if (height == FULL_HD) FULL_HD else HD720
+
+    fun width(height: Int): Int = if (sanitize(height) == FULL_HD) 1920 else 1280
+
+    fun maxBitrate(height: Int): Int =
+        if (sanitize(height) == FULL_HD) StreamConfig.MAX_BITRATE_1080P else StreamConfig.MAX_BITRATE_720P
+}

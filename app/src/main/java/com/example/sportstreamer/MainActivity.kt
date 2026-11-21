@@ -1307,14 +1307,13 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // поэтому второй энкодер не нужен, а значит нет и пересборок GL на ходу —
         // именно они давали чёрный кадр.
         val dual = false
+        // Разрешение эфира выбирается в настройках: 720p или 1080p.
+        val streamHeight = StreamResolution.sanitize(settings.streamHeight)
+        val streamWidth = StreamResolution.width(streamHeight)
         dualEncodersActive = false
         // Потолок зависит от разрешения эфира: 720p не нужны 1080p-мегабиты,
         // а каждый лишний мегабит — это лишний нагрев телефона.
-        bitrateAdapter.maxBitrate = if (dual) {
-            StreamConfig.MAX_BITRATE_720P
-        } else {
-            StreamConfig.MAX_BITRATE_1080P
-        }
+        bitrateAdapter.maxBitrate = StreamResolution.maxBitrate(streamHeight)
         val videoPrepared = when {
             dual -> camera.prepareVideo(
                 StreamConfig.STREAM_WIDTH,
@@ -1331,8 +1330,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             )
 
             forStream -> camera.prepareVideo(
-                StreamConfig.RECORD_WIDTH,
-                StreamConfig.RECORD_HEIGHT,
+                streamWidth,
+                streamHeight,
                 StreamConfig.FPS,
                 streamBitrate,
                 StreamConfig.IFRAME_INTERVAL_SECONDS,
@@ -1358,7 +1357,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             TAG,
             if (dual) {
                 "prepareEncoders (${if (forStream) "эфир" else "запись"}): " +
-                    "эфир ${StreamConfig.STREAM_WIDTH}x${StreamConfig.STREAM_HEIGHT} " +
+                    "эфир ${streamWidth}x${streamHeight} " +
                     "${streamBitrate / 1000} кбит/с + запись " +
                     "${StreamConfig.RECORD_WIDTH}x${StreamConfig.RECORD_HEIGHT} " +
                     "${recordBitrate / 1000} кбит/с (отдельные энкодеры)"
