@@ -339,6 +339,14 @@ class SettingsPanel(
         // Содержимое карточки «Что запускать» меняется сразу при выборе режима.
         binding.rtmpCard.isVisible = StartMode.includesStream(mode)
         binding.recordOptions.isVisible = StartMode.includesRecording(mode)
+
+        // Битрейт записи действует только в режиме «только запись»: при эфире
+        // (в том числе с записью) файл пишется тем же энкодером, что и поток,
+        // и берёт битрейт эфира. Показывать настройку в этих режимах — обманывать.
+        val recordOnly = !StartMode.includesStream(mode)
+        binding.recordBitrateLabel.isVisible = recordOnly
+        binding.rgRecordBitrate.isVisible = recordOnly
+        binding.recordBitrateHint.isVisible = recordOnly
     }
 
     /**
