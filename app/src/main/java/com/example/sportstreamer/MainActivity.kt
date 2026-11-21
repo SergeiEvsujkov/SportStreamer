@@ -1307,13 +1307,14 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
         // поэтому второй энкодер не нужен, а значит нет и пересборок GL на ходу —
         // именно они давали чёрный кадр.
         val dual = false
-        // Разрешение эфира выбирается в настройках: 720p или 1080p.
-        val streamHeight = StreamResolution.sanitize(settings.streamHeight)
-        val streamWidth = StreamResolution.width(streamHeight)
+        // Разрешение видео выбирается в настройках: 720p или 1080p.
+        // Оно общее для эфира и записи — и при эфире с записью, и при записи без эфира.
+        val videoHeight = StreamResolution.sanitize(settings.streamHeight)
+        val videoWidth = StreamResolution.width(videoHeight)
         dualEncodersActive = false
         // Потолок зависит от разрешения эфира: 720p не нужны 1080p-мегабиты,
         // а каждый лишний мегабит — это лишний нагрев телефона.
-        bitrateAdapter.maxBitrate = StreamResolution.maxBitrate(streamHeight)
+        bitrateAdapter.maxBitrate = StreamResolution.maxBitrate(videoHeight)
         val videoPrepared = when {
             dual -> camera.prepareVideo(
                 StreamConfig.STREAM_WIDTH,
@@ -1330,8 +1331,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             )
 
             forStream -> camera.prepareVideo(
-                streamWidth,
-                streamHeight,
+                videoWidth,
+                videoHeight,
                 StreamConfig.FPS,
                 streamBitrate,
                 StreamConfig.IFRAME_INTERVAL_SECONDS,
@@ -1341,8 +1342,8 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             )
 
             else -> camera.prepareVideo(
-                StreamConfig.RECORD_WIDTH,
-                StreamConfig.RECORD_HEIGHT,
+                videoWidth,
+                videoHeight,
                 StreamConfig.FPS,
                 recordBitrate,
                 StreamConfig.IFRAME_INTERVAL_SECONDS,
@@ -1357,7 +1358,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             TAG,
             if (dual) {
                 "prepareEncoders (${if (forStream) "эфир" else "запись"}): " +
-                    "эфир ${streamWidth}x${streamHeight} " +
+                    "эфир ${videoWidth}x${videoHeight} " +
                     "${streamBitrate / 1000} кбит/с + запись " +
                     "${StreamConfig.RECORD_WIDTH}x${StreamConfig.RECORD_HEIGHT} " +
                     "${recordBitrate / 1000} кбит/с (отдельные энкодеры)"

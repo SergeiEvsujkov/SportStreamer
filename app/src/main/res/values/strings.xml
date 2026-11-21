@@ -28,10 +28,10 @@
     <string name="settings_rtmp_url_hint">RTMP URL</string>
     <string name="settings_rtmp_key_hint">RTMP Key</string>
     <string name="settings_save_video_label">Сохранять видео в память</string>
-    <string name="settings_stream_resolution_label">Разрешение эфира</string>
+    <string name="settings_stream_resolution_label">Разрешение видео</string>
     <string name="settings_stream_resolution_720">720p — экономнее, меньше нагрев</string>
     <string name="settings_stream_resolution_1080">1080p — чётче, больше нагрузки</string>
-    <string name="settings_stream_resolution_hint">Применяется при следующем запуске эфира.</string>
+    <string name="settings_stream_resolution_hint">Общее для эфира и записи. Применяется при следующем запуске.</string>
     <string name="settings_camera_header">КАМЕРА</string>
     <string name="settings_stabilization_label">Стабилизация изображения</string>
     <string name="settings_stabilization_hint">Сглаживает дрожание камеры. Работает, если устройство поддерживает электронную стабилизацию; на некоторых моделях она отключается при сильном приближении.</string>
