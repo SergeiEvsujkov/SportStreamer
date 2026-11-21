@@ -300,8 +300,9 @@ class SettingsPanel(
             updateBrightnessLabel(value.roundToInt())
             persistSettings()
         }
-        binding.switchAutoExposure.setOnCheckedChangeListener { _, checked ->
-            binding.brightnessSlider.isEnabled = checked
+        binding.switchAutoExposure.setOnCheckedChangeListener { _, _ ->
+            // Ползунок яркости работает всегда: при выключенной автоэкспозиции он
+            // задаёт поправку вручную.
             updateBrightnessLabel(binding.brightnessSlider.value.roundToInt())
             persistSettings()
         }
@@ -425,7 +426,7 @@ class SettingsPanel(
         binding.switchStabilization.isChecked = settings.videoStabilization
         binding.switchAutoExposure.isChecked = settings.autoExposure
         binding.brightnessSlider.value = settings.exposureCompensation.toFloat()
-        binding.brightnessSlider.isEnabled = settings.autoExposure
+        binding.brightnessSlider.isEnabled = true
         updateBrightnessLabel(settings.exposureCompensation)
 
         if (settings.setsToWin == ScoreEngine.SETS_TO_WIN_BEST_OF_FIVE) {

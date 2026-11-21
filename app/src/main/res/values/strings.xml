@@ -39,7 +39,7 @@
     <string name="settings_stabilization_hint">Сглаживает дрожание камеры. Работает, если устройство поддерживает электронную стабилизацию; на некоторых моделях она отключается при сильном приближении.</string>
     <string name="stabilization_not_supported">Устройство не поддерживает стабилизацию изображения</string>
     <string name="settings_auto_exposure_label">Автоэкспозиция и яркость</string>
-    <string name="settings_auto_exposure_hint">Камера сама подстраивает экспозицию под освещение, а ползунок ниже задаёт поправку яркости.</string>
+    <string name="settings_auto_exposure_hint">Камера сама подстраивает экспозицию под освещение. Ползунок задаёт поправку яркости и работает в обоих режимах — им же можно выставить яркость вручную, если автоэкспозиция выключена.</string>
     <string name="settings_brightness_label">Яркость: %1$d%%</string>
     <string name="settings_brightness_desc">Поправка яркости</string>
     <string name="settings_save_button">Сохранить настройки</string>

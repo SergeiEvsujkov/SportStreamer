@@ -1638,18 +1638,17 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
     private fun applyExposure() {
         val camera = rtmpCamera2 ?: return
         try {
-            if (!settings.autoExposure) {
-                if (camera.isAutoExposureEnabled) {
-                    camera.disableAutoExposure()
-                    Log.i(TAG, "Автоэкспозиция выключена")
+            if (settings.autoExposure) {
+                if (!camera.isAutoExposureEnabled && !camera.enableAutoExposure()) {
+                    Log.w(TAG, "Устройство не поддерживает автоэкспозицию")
+                    return
                 }
-                return
+            } else if (camera.isAutoExposureEnabled) {
+                camera.disableAutoExposure()
+                Log.i(TAG, "Автоэкспозиция выключена")
             }
-
-            if (!camera.isAutoExposureEnabled && !camera.enableAutoExposure()) {
-                Log.w(TAG, "Устройство не поддерживает автоэкспозицию")
-                return
-            }
+            // Поправка яркости применяется в обоих режимах: ползунок должен влиять
+            // и при выключенной автоэкспозиции.
 
             val min = camera.minExposure
             val max = camera.maxExposure
